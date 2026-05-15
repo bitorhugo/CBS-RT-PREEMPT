@@ -5,7 +5,9 @@
 #include <asm/uaccess.h>
 #include <linux/uaccess.h>
 #include <linux/sched/clock.h>
+#include <linux/ktime.h>
 #include "trace.h"
+
 
 unsigned int is_tracing_enabled = 0;
 
