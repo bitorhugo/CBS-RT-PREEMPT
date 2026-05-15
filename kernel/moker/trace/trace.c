@@ -102,11 +102,16 @@ out_unlock:
 static int enqueue (enum evt event, unsigned long long time,
 		    int number, struct task_struct *p)
 {
+	int id = -1;
 	unsigned long flags;
 	spin_lock_irqsave(&trace.lock, flags);
 
 	if(is_full(trace.read_item, trace.write_item)) {
 		increment(&trace.read_item);
+	}
+
+	if(cbs_policy(p->policy)){
+		id = p->cbs.id;
 	}
 
 	trace.events[trace.write_item].number = number;
@@ -116,7 +121,7 @@ static int enqueue (enum evt event, unsigned long long time,
 	trace.events[trace.write_item].state  = READ_ONCE(p->__state);
 	trace.events[trace.write_item].prio   = p->prio;
 	trace.events[trace.write_item].policy = p->policy;
-	trace.events[trace.write_item].id     = p->id;
+	trace.events[trace.write_item].id     = id;
 	strncpy(trace.events[trace.write_item].comm, p->comm, TASK_COMM_LEN - 1);
 	trace.events[trace.write_item].comm[TASK_COMM_LEN - 1] = '\0';
 
