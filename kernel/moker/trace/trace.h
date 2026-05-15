@@ -25,6 +25,7 @@ struct trace_evt {
 	int prio;
 	int policy;
 	char comm[TRACE_TASK_COMM_LEN];
+	int id;
 };
 
 struct trace_evt_buffer {

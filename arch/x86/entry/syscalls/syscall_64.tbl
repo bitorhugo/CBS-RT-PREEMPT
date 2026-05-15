@@ -397,6 +397,7 @@
 470	common	listns			sys_listns
 #ifdef CONFIG_MOKER_FRAMEWORK
 471 common moker_tracing sys_moker_tracing
+472 common moker_id sys_moker_id
 #endif
 
 

@@ -7,7 +7,7 @@
 #include <linux/sched/clock.h>
 #include <linux/ktime.h>
 #include "trace.h"
-
+#include "../../sched/sched.h"
 
 unsigned int is_tracing_enabled = 0;
 
@@ -75,6 +75,8 @@ static int dequeue (char *buffer)
 			trace.events[trace.read_item].time);
 	len += snprintf(buffer + len, remaining - len, "%s,",
 			evt);
+	len += snprintf(buffer + len, remaining - len, "%d,",
+			trace.events[trace.read_item].id);
 	len += snprintf(buffer + len, remaining - len, "*%d*,",
 			trace.events[trace.read_item].number);
 	len += snprintf(buffer + len, remaining - len, "%d,",
@@ -114,7 +116,7 @@ static int enqueue (enum evt event, unsigned long long time,
 	trace.events[trace.write_item].state  = READ_ONCE(p->__state);
 	trace.events[trace.write_item].prio   = p->prio;
 	trace.events[trace.write_item].policy = p->policy;
-
+	trace.events[trace.write_item].id     = p->id;
 	strncpy(trace.events[trace.write_item].comm, p->comm, TASK_COMM_LEN - 1);
 	trace.events[trace.write_item].comm[TASK_COMM_LEN - 1] = '\0';
 
