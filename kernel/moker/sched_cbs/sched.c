@@ -7,6 +7,10 @@
 #include "../trace/trace.h"
 #endif
 
+static inline struct task_struct *cbs_task_of(struct sched_cbs_entity *cbs_se)
+{
+	return container_of(cbs_se, struct task_struct, cbs);
+}
 
 static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 {
@@ -14,11 +18,15 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
         struct cbs_rq *cbs_rq;
         u64 now;
 
+	raw_spin_lock(&rq->cbs.lock);
+
 	cbs_se = &p->cbs;
 	cbs_rq = &rq->cbs;
 
-	if(WARN_ON_ONCE(cbs_se->on_rq))
+	if(WARN_ON_ONCE(cbs_se->on_rq)) {
+		raw_spin_unlock(&rq->cbs.lock);
 		return;
+	}
 
 	now = rq_clock_task(rq);
 
@@ -29,10 +37,14 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	// 2. insert on tree
 	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
+	pr_info("MOKER: Inserted [id:%d] on tree\n", cbs_se->id);
 
 	// 3. mark task as part of the rq
         cbs_se->on_rq = 1;
+	cbs_rq->nr_running++;
         add_nr_running(rq, 1);
+
+	raw_spin_unlock(&rq->cbs.lock);
 
 #ifdef CONFIG_MOKER_TRACING
         moker_trace(ENQUEUE_RQ, p, cbs_se->id);
@@ -45,18 +57,26 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
         struct sched_cbs_entity *cbs_se;
         struct cbs_rq           *cbs_rq;
 
+	raw_spin_lock(&rq->cbs.lock);
+
 	cbs_se = &p->cbs;
 	cbs_rq = &rq->cbs;
 
-	if(WARN_ON_ONCE(!cbs_se->on_rq))
+	if(WARN_ON_ONCE(!cbs_se->on_rq)) {
+		raw_spin_unlock(&rq->cbs.lock);
 		return false;
+	}
 
 	// 1. erase task from rq
 	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
+	pr_info("MOKER: Erased [id:%d] from tree\n", cbs_se->id);
 
 	// 2. mark task as not part of the rq
 	cbs_se->on_rq = 0;
+	cbs_rq->nr_running--;
 	sub_nr_running(rq, 1);
+
+	raw_spin_unlock(&rq->cbs.lock);
 
 #ifdef CONFIG_MOKER_TRACING
         moker_trace(DEQUEUE_RQ, p, cbs_se->id);
@@ -80,7 +100,7 @@ static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 	diff = (s64)(p->cbs.deadline - curr->cbs.deadline);
 
         if (diff < 0) {
-		pr_info("Moker: Preempting: in:[id:%d] out:[id:%d]\n",
+		pr_info("Moker: Preempting: out:[id:%d] in:[id:%d]\n",
 			curr->cbs.id, p->cbs.id);
                 resched_curr(rq);
 	}
@@ -92,17 +112,27 @@ static struct task_struct *pick_task_cbs(struct rq *rq, struct rq_flags *rf)
 	struct task_struct *picked;
 	struct rb_node *leftmost;
 
-        if (rq->cbs.nr_running < 1)
+	raw_spin_lock(&rq->cbs.lock);
+
+        if (rq->cbs.nr_running < 1) {
+		raw_spin_unlock(&rq->cbs.lock);
                 return NULL;
+	}
 
 	leftmost = rb_first_cached(&rq->cbs.tasks_tree);
-	if (!leftmost)
+	if (!leftmost) {
+		raw_spin_unlock(&rq->cbs.lock);
 		return NULL;
+	}
 
-	picked = container_of(leftmost, struct task_struct, cbs.rb_node);
+	picked = cbs_task_of(container_of(leftmost,
+					  struct sched_cbs_entity,
+					  rb_node));
 	pr_info("Moker: Picked [id:%d]\n", picked->cbs.id);
 
-        return picked;
+	raw_spin_unlock(&rq->cbs.lock);
+
+	return picked;
 }
 
 
@@ -134,9 +164,7 @@ static void switched_to_cbs(struct rq *rq, struct task_struct *task)
 
 
 static void update_curr_cbs(struct rq *rq)
-{
-	pr_info("Moker: Updating..\n");
-}
+{}
 
 
 DEFINE_SCHED_CLASS(cbs) = {
