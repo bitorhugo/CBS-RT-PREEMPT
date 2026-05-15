@@ -6868,6 +6868,11 @@ keep_resched:
 		psi_sched_switch(prev, next, !task_on_rq_queued(prev) ||
 					     prev->se.sched_delayed);
 
+#ifdef CONFIG_MOKER_TRACING
+		moker_trace(SWITCH_AWAY, prev, -1);
+		moker_trace(SWITCH_TO, next, -1);
+#endif
+
 		trace_sched_switch(preempt, prev, next, prev_state);
 
 		/* Also unlocks the rq: */
