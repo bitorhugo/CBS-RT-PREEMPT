@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
 
-#include "../../sched/sched.h"
 #include "cbs_rq.h"
 #include "cbs_task.h"
+#include "../../sched/sched.h"
 #ifdef CONFIG_MOKER_TRACING
-#include "../TRACE/trace.h"
+#include "../trace/trace.h"
 #endif
 
 
