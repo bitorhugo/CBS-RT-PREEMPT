@@ -2,7 +2,7 @@
 #define __CBS_RQ_H_
 
 #include <linux/sched.h>
-#include <linux/rbtree.h>
+#include <linux/rbtree_types.h>
 #include <linux/spinlock.h>
 #include "cbs_task.h"
 

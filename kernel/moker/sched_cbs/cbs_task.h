@@ -2,7 +2,8 @@
 #ifndef __CBS_TASK_H_
 #define __CBS_TASK_H_
 
-#include <linux/rbtree.h>
+#include <linux/rbtree_types.h>
+#include <linux/types.h>
 
 struct sched_cbs_entity {
         struct rb_node rb_node;
