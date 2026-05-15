@@ -1,5 +1,6 @@
 #include "cbs_rq.h"
 #include "cbs_task.h"
+#include <linux/rb_tree>
 
 
 void init_cbs_rq(struct cbs_rq *rq)
@@ -16,8 +17,8 @@ bool cbs_rq_less(struct rb_node *this, const struct rb_node *that)
 	struct sched_cbs_entity *se_that;
 	s64 diff;
 
-	se_this = rb_entry(this, struct sched_cbs_entity, rb_node);
-	se_that = rb_entry(that, struct sched_cbs_entity, rb_node);
+	se_this = rb_entry(this, sched_cbs_entity, rb_node);
+	se_that = rb_entry(that, sched_cbs_entity, rb_node);
 
 	/* Most scheduling classes do comparisons by:
 	 * 1. coercing to 64bit the value of some arithmetic op

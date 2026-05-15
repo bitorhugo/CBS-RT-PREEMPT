@@ -3,6 +3,7 @@
 
 #include <linux/sched.h>
 #include <linux/rbtree_types.h>
+#include <linux/types.h>
 #include <linux/spinlock.h>
 #include "cbs_task.h"
 
