@@ -7072,6 +7072,11 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 			h_nr_idle = 1;
 	}
 
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+/* this prevents the CFS starvation mechanism */
+	rq_h_nr_queued = 1;
+#endif
+
 	if (!rq_h_nr_queued && rq->cfs.h_nr_queued)
 		dl_server_start(&rq->fair_server);
 

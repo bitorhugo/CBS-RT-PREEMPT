@@ -6868,9 +6868,17 @@ keep_resched:
 		psi_sched_switch(prev, next, !task_on_rq_queued(prev) ||
 					     prev->se.sched_delayed);
 
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+		if(cbs_policy(prev->policy)|| cbs_policy(next->policy)){
+#endif
+
 #ifdef CONFIG_MOKER_TRACING
 		moker_trace(SWITCH_AWAY, prev, -1);
 		moker_trace(SWITCH_TO, next, -1);
+#endif
+
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+		}
 #endif
 
 		trace_sched_switch(preempt, prev, next, prev_state);
@@ -7223,6 +7231,11 @@ const struct sched_class *__setscheduler_class(int policy, int prio)
 {
 	if (dl_prio(prio))
 		return &dl_sched_class;
+
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+	if(cbs_policy(policy))
+		return &cbs_sched_class;
+#endif
 
 	if (rt_prio(prio))
 		return &rt_sched_class;
@@ -8562,6 +8575,10 @@ void __init sched_init(void)
 	/* Make sure the linker didn't screw up */
 	BUG_ON(!sched_class_above(&stop_sched_class, &dl_sched_class));
 	BUG_ON(!sched_class_above(&dl_sched_class, &rt_sched_class));
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+	BUG_ON(!sched_class_above(&dl_sched_class, &cbs_sched_class));
+	BUG_ON(!sched_class_above(&cbs_sched_class, &rt_sched_class));
+#endif
 	BUG_ON(!sched_class_above(&rt_sched_class, &fair_sched_class));
 	BUG_ON(!sched_class_above(&fair_sched_class, &idle_sched_class));
 #ifdef CONFIG_SCHED_CLASS_EXT
@@ -8628,6 +8645,9 @@ void __init sched_init(void)
 		rq->calc_load_active = 0;
 		rq->calc_load_update = jiffies + LOAD_FREQ;
 		init_cfs_rq(&rq->cfs);
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+		init_cbs_rq(&rq->cbs);
+#endif
 		init_rt_rq(&rq->rt);
 		init_dl_rq(&rq->dl);
 #ifdef CONFIG_FAIR_GROUP_SCHED

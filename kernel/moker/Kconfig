@@ -8,4 +8,9 @@ bool "MOKER tracing"
 default y
 depends on MOKER_FRAMEWORK
 
+config MOKER_SCHED_CBS_POLICY
+bool "MOKER scheduling policy: CBS"
+default y
+depends on MOKER_FRAMEWORK
+
 endmenu

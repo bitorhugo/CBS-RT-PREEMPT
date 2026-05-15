@@ -3361,7 +3361,12 @@ static int task_is_throttled_dl(struct task_struct *p, int cpu)
 
 DEFINE_SCHED_CLASS(dl) = {
 
-	.queue_mask		= 8,
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+
+	.queue_mask             = 16,
+#else
+	.queue_mask             = 8,
+#endif
 
 	.enqueue_task		= enqueue_task_dl,
 	.dequeue_task		= dequeue_task_dl,

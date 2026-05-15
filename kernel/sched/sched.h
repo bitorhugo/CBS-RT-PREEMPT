@@ -96,6 +96,10 @@ struct cpuidle_state;
 #include "../moker/trace/trace.h"
 #endif
 
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+# include "../moker/sched_cbs/cbs_rq.h"
+#endif
+
 /* task_struct::on_rq states: */
 #define TASK_ON_RQ_QUEUED	1
 #define TASK_ON_RQ_MIGRATING	2
@@ -211,6 +215,13 @@ static inline int rt_policy(int policy)
 	return policy == SCHED_FIFO || policy == SCHED_RR;
 }
 
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+static inline int cbs_policy(int policy)
+{
+	return policy == SCHED_CBS;
+}
+#endif
+
 static inline int dl_policy(int policy)
 {
 	return policy == SCHED_DEADLINE;
@@ -219,7 +230,11 @@ static inline int dl_policy(int policy)
 static inline bool valid_policy(int policy)
 {
 	return idle_policy(policy) || fair_policy(policy) ||
-		rt_policy(policy) || dl_policy(policy);
+		rt_policy(policy) || dl_policy(policy)
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+		|| cbs_policy(policy)
+#endif
+		;
 }
 
 static inline int task_has_idle_policy(struct task_struct *p)
@@ -1155,6 +1170,10 @@ struct rq {
 	struct dl_rq		dl;
 #ifdef CONFIG_SCHED_CLASS_EXT
 	struct scx_rq		scx;
+#endif
+
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+	struct cbs_rq           cbs;
 #endif
 
 	struct sched_dl_entity	fair_server;
@@ -2693,6 +2712,9 @@ extern struct sched_class __sched_class_lowest[];
 
 extern const struct sched_class stop_sched_class;
 extern const struct sched_class dl_sched_class;
+#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+extern const struct sched_class cbs_sched_class;
+#endif
 extern const struct sched_class rt_sched_class;
 extern const struct sched_class fair_sched_class;
 extern const struct sched_class idle_sched_class;
