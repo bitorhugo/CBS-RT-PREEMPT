@@ -1,6 +1,6 @@
 #include "cbs_rq.h"
 #include "cbs_task.h"
-#include <linux/rb_tree>
+#include <linux/rbtree.h>
 
 
 void init_cbs_rq(struct cbs_rq *rq)
