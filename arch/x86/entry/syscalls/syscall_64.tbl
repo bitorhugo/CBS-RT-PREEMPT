@@ -395,6 +395,10 @@
 468	common	file_getattr		sys_file_getattr
 469	common	file_setattr		sys_file_setattr
 470	common	listns			sys_listns
+#ifdef CONFIG_MOKER_FRAMEWORK
+471 common moker_tracing sys_moker_tracing
+#endif
+
 
 #
 # Due to a historical design error, certain syscalls are numbered differently

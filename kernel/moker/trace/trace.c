@@ -7,7 +7,7 @@
 #include <linux/sched/clock.h>
 #include "trace.h"
 
-unsigned int tracing = 0;
+unsigned int is_tracing_enabled = 0;
 
 struct trace_evt_buffer trace;
 
@@ -173,13 +173,13 @@ void moker_trace(enum evt event, struct task_struct *p, int number)
 {
 	unsigned long long time;
 
-	if(tracing) {
-		time = local_clock();
+	if(is_tracing_enabled) {
+		time = ktime_to_ns(ktime_get());
 		enqueue(event, time, number, p);
 	}
 }
 
 void set_tracing(unsigned int toggle)
 {
-	tracing = toggle;
+	is_tracing_enabled = toggle;
 }
