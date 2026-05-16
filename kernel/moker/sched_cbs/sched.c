@@ -8,6 +8,11 @@
 #endif
 
 
+static inline int task_has_cbs_policy(struct task_struct *p)
+{
+	return p->policy == SCHED_CBS;
+}
+
 static inline struct task_struct *cbs_task_of(struct sched_cbs_entity *cbs_se)
 {
 	return container_of(cbs_se, struct task_struct, cbs);
@@ -71,13 +76,16 @@ static void sched_cbs_entity_hr_deadline_arm(struct sched_cbs_entity *p)
 }
 
 
-static void sched_cbs_entity_hr_deadline_disarm(struct sched_cbs_entity *p)
+static int sched_cbs_entity_hr_deadline_disarm(struct sched_cbs_entity *p)
 {
 	struct hrtimer *timer;
+	int ret;
 
 	timer = &p->hr_deadline;
 
-	hrtimer_try_to_cancel(timer);
+	ret = hrtimer_try_to_cancel(timer);
+
+	return ret;
 }
 
 
@@ -86,6 +94,9 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
         struct sched_cbs_entity *cbs_se;
         struct cbs_rq *cbs_rq;
         u64 now;
+
+	if(!task_has_cbs_policy(p))
+		return;
 
 	raw_spin_lock(&rq->cbs.lock);
 
@@ -128,6 +139,7 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 {
         struct sched_cbs_entity *cbs_se;
         struct cbs_rq           *cbs_rq;
+	int is_disarmed;
 
 	raw_spin_lock(&rq->cbs.lock);
 
@@ -140,7 +152,9 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	}
 
 	// 1. disarm hr_deadline
-	sched_cbs_entity_hr_deadline_disarm(cbs_se);
+	is_disarmed = sched_cbs_entity_hr_deadline_disarm(cbs_se);
+	trace_printk("MOKER: [id:%d] Disarm [status:%d] %d\n",
+		     cbs_se->id, is_disarmed);
 
 	// 2. erase task from rq
 	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
@@ -224,6 +238,7 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 
 	/* Start deadline countdown */
 	sched_cbs_entity_hr_deadline_arm(cbs_se);
+	trace_printk("MOKER: [id:%d] Timer armed\n", picked->cbs.id);
 }
 
 
