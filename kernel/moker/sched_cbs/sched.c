@@ -183,7 +183,7 @@ static void sched_cbs_entity_hr_replenish_arm(struct sched_cbs_entity *p)
 	enum hrtimer_mode mode;
 
 	if(p->server.remaining_budget <= 0) {
-		trace_printk("MOKER: [id:%d] Replenish is <=0\n", cbs_se->id);
+		trace_printk("MOKER: [id:%d] Replenish is <=0\n", p->id);
 		return;
 	}
 
