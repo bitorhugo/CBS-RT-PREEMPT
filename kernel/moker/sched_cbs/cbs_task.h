@@ -6,13 +6,26 @@
 #include <linux/types.h>
 #include <linux/hrtimer_types.h>
 
+struct sched_cbs_entity_server {
+	u64 capacity;
+
+	struct hrtimer hr_replenish;
+
+	int first; /* -1 if not */
+}
+
 struct sched_cbs_entity {
         struct rb_node rb_node;
 
-        u64 runtime;
+        u64 runtime; /* hard:Ci, soft:cs */
+	u64 remaining_runtime; /* for keeping track of time in CPU */
         u64 period;
 	u64 deadline;
+	u64 bandwidth; /* runtime/period */
+
 	struct hrtimer hr_deadline;
+
+	struct sched_cbs_entity_server server;
 
 	int on_rq;
 	int id;
