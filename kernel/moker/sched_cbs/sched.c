@@ -153,7 +153,7 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	// 1. disarm hr_deadline
 	is_disarmed = sched_cbs_entity_hr_deadline_disarm(cbs_se);
-	trace_printk("MOKER: [id:%d] Disarm [status:%d] %d\n",
+	trace_printk("MOKER: [id:%d] Disarm [status:%d]\n",
 		     cbs_se->id, is_disarmed);
 
 	// 2. erase task from rq
