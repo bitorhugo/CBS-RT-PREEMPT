@@ -108,7 +108,7 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 		return;
 	}
 
-	now = rq_clock_task(rq);
+	now = ktime_get_ns();
 
 	// 1. calculate deadline, d = now + period
 	cbs_se->deadline = now + cbs_se->period;
@@ -119,8 +119,10 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
 	trace_printk("MOKER: [id:%d] Inserted on tree\n", cbs_se->id);
 
-	// 3. setup deadline timer
+	// 3. setup and start deadline timer
 	sched_cbs_entity_hr_deadline_setup(cbs_se);
+	sched_cbs_entity_hr_deadline_arm(cbs_se);
+	trace_printk("MOKER: [id:%d] Timer armed\n", cbs_se->id);
 
 	// 4. mark task as part of the rq
         cbs_se->on_rq = 1;
@@ -235,10 +237,6 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 
 	if(!first)
 		return;
-
-	/* Start deadline countdown */
-	sched_cbs_entity_hr_deadline_arm(cbs_se);
-	trace_printk("MOKER: [id:%d] Timer armed\n", cbs_se->id);
 }
 
 
