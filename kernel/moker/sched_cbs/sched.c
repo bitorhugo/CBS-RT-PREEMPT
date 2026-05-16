@@ -34,7 +34,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 	 */
 	trace_printk("MOKER: [id:%d] Deadline not met\n", cbs_se->id);
 
-	task_rq_unlock(rq, &rflags);
+	task_rq_unlock(rq, p, &rflags);
 
 	return HRTIMER_NORESTART;
 }
