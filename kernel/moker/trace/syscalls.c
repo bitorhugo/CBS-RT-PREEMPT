@@ -39,7 +39,7 @@ SYSCALL_DEFINE4(moker_sched_cbs_entity_setup,
 		id,
 		(unsigned long long)runtime,
 		(unsigned long long)period,
-		(unsigned long long)deadline;
+		(unsigned long long)deadline);
 
 	#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
 	return do_moker_sched_cbs_entity_setup(id, runtime, period, deadline);
