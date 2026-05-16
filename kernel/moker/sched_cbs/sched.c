@@ -2,7 +2,6 @@
 
 #include "cbs_rq.h"
 #include "cbs_task.h"
-#include <linux/hrtimer.h>
 #include "../../sched/sched.h"
 #ifdef CONFIG_MOKER_TRACING
 #include "../trace/trace.h"
