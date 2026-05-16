@@ -112,8 +112,6 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	// 1. calculate deadline, d = now + period
 	cbs_se->deadline = now + cbs_se->period;
-	trace_printk("MOKER: [id:%d] Calculated Deadline[:%llu]\n",
-		     cbs_se->id, (unsigned long long)cbs_se->deadline);
 
 	// 2. insert in tree
 	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
@@ -128,6 +126,12 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
         cbs_se->on_rq = 1;
 	cbs_rq->nr_running++;
         add_nr_running(rq, 1);
+
+	trace_printk("MOKER: [id:%d] [Ci:%llu] [Ti:%llu] [Di:%llu]\n",
+		     cbs_se->id,
+		     (unsigned long long)cbs_se->runtime,
+		     (unsigned long long)cbs_se->period,
+		     (unsigned long long)cbs_se->deadline);
 
 	raw_spin_unlock(&rq->cbs.lock);
 

@@ -12,45 +12,6 @@
 #include <sys/syscall.h>
 #include <pthread.h>
 
-#ifdef __x86_64__
-#define __NR_sched_setattr           314
-#define __NR_sched_getattr           315
-#endif
-
-struct sched_attr {
-	__u32 size;
-
-	__u32 sched_policy;
-	__u64 sched_flags;
-
-	/* SCHED_NORMAL, SCHED_BATCH */
-	__s32 sched_nice;
-
-	/* SCHED_FIFO, SCHED_RR */
-	__u32 sched_priority;
-
-	/* SCHED_DEADLINE (nsec) */
-	__u64 sched_runtime;
-	__u64 sched_deadline;
-	__u64 sched_period;
-};
-
-
-int sched_setattr(pid_t pid,
-		  const struct sched_attr *attr,
-		  unsigned int flags)
-{
-	return syscall(__NR_sched_setattr, pid, attr, flags);
-}
-
-
-int sched_getattr(pid_t pid,
-		  struct sched_attr *attr,
-		  unsigned int size,
-		  unsigned int flags)
-{
-	return syscall(__NR_sched_getattr, pid, attr, size, flags);
-}
 
 void do_work(unsigned long long exec)
 {
@@ -171,8 +132,6 @@ int main(int argc, char **argv)
 	unsigned int task_id;
 	unsigned int njobs;
 	int res;
-	/* struct sched_param param; */
-	struct sched_attr attr;
 	struct timespec r;
 
 	task_id = atoi(argv[1]);
@@ -184,36 +143,13 @@ int main(int argc, char **argv)
 	time0 = (unsigned long long)atoll(argv[5]);
 	njobs = atoi(argv[6]);
 
-	/* param.sched_priority = 0; */
-
-	attr.size = sizeof(attr);
-	attr.sched_flags = 0;
-	attr.sched_nice = 0;
-	attr.sched_priority = 0;
-	attr.sched_policy = SCHED_CBS;
-	attr.sched_runtime = C;
-	attr.sched_period = T;
-	attr.sched_deadline = T;
-
-	/*
-	  res = sched_setscheduler(0, SCHED_CBS, &param);
-	  if(res == -1)
-	  goto err_sched_setscheduler;
-	*/
-
-	ret = sched_setattr(0, &attr, flags);
-	if(ret < 0) {
-		goto err_sched_setattr;
-	}
-
-	printf("Task(%d, %d): after SCHED_CBS\n", task_id, getpid());
-
-	printf("Task(%d,%d): set ID\n", task_id,getpid());
-	if((syscall(SYS_MOKER_ID, task_id)) < 0) {
-		perror("ERROR: Setting moker id failed");
+	printf("Task(%d,%d): setup ID\n", task_id, getpid());
+	if((syscall(SYS_MOKER_TASK_SETUP, task_id, C, T, D)) < 0) {
+		perror("ERROR: Setting moker task setup failed");
 		exit(-1);
 	}
 
+	printf("Task(%d, %d): after SCHED_CBS\n", task_id, getpid());
 
 	release = time0 + O;
 

@@ -25,7 +25,7 @@
 #define SCHED_CBS		8
 
 #define SYS_MOKER_TRACING_ENABLE 471
-#define SYS_MOKER_ID 472
+#define SYS_MOKER_TASK_SETUP 472
 
 
 struct task {
