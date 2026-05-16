@@ -4,7 +4,7 @@
 
 #include <linux/rbtree_types.h>
 #include <linux/types.h>
-#include <linux/hrtimer.h>
+#include <linux/hrtimer_types.h>
 
 struct sched_cbs_entity {
         struct rb_node rb_node;
