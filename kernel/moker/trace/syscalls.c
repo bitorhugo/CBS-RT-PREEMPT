@@ -52,7 +52,7 @@ int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadlin
 	current->cbs.period   = period;
 	current->cbs.deadline = deadline;
 	if(is_hard)
-		currnet->cbs_server   = NULL;
+		current->cbs.server = NULL;
 
 	return sched_setscheduler(current,
 				  SCHED_CBS,
