@@ -28,29 +28,27 @@ int set_moker_tracing(unsigned int toggle)
 
 
 
-SYSCALL_DEFINE5(moker_sched_cbs_entity_setup,
+SYSCALL_DEFINE4(moker_sched_cbs_entity_setup,
 		int, id,
 		u64, runtime,
 		u64, period,
-		u64, deadline,
-		int, is_hard)
+		u64, deadline)
 {
-	pr_info("MOKER: sys_sched_cbs_entity_setup:[pid=%d][id=%d][is_hard=%d][c=%llu][t=%llu][d=%llu]\n",
+	pr_info("MOKER: sys_sched_cbs_entity_setup:[pid=%d][id=%d][c=%llu][t=%llu][d=%llu]\n",
 		current->pid,
 		id,
 		is_hard,
 		(unsigned long long)runtime,
-		(unsigned long long)period,
-		(unsigned long long)deadline);
+		(unsigned long long)period;
 
 	#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
-	return do_moker_sched_cbs_entity_setup(id, runtime, period, deadline, is_hard);
+	return do_moker_sched_cbs_entity_setup(id, runtime, period, deadline);
 	#else
 	return -1;
 	#endif
 }
 
-int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadline, int is_hard)
+int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadline)
 {
 	current->cbs.id       = id;
 	current->cbs.runtime  = runtime;
