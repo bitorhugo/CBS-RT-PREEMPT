@@ -47,7 +47,7 @@ static void sched_cbs_entity_hr_deadline_arm(struct sched_cbs_entity *p)
 	enum hrtimer_mode mode;
 
 	timer = &p->hr_deadline;
-	deadline = ns_to_ktime(p.deadline);
+	deadline = ns_to_ktime(p->deadline);
 	mode = HRTIMER_MODE_ABS_HARD;
 
 	hrtimer_start(timer, deadline, mode);
@@ -195,10 +195,8 @@ static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
 
 static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 {
-	struct cbs_rq *rq;
 	struct sched_cbs_se *cbs_se;
 
-	rq = &rq->cbs;
 	cbs_se = &p->cbs;
 
 	if(!first)
