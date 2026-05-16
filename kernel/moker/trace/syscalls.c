@@ -51,11 +51,8 @@ int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadlin
 	current->cbs.runtime  = runtime;
 	current->cbs.period   = period;
 	current->cbs.deadline = deadline;
-	if(is_hard)
-		current->cbs.server = NULL;
 
 	return sched_setscheduler(current,
 				  SCHED_CBS,
 				  &(struct sched_param){ .sched_priority = 0});
-
 }
