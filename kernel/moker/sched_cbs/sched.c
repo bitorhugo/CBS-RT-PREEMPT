@@ -2,15 +2,68 @@
 
 #include "cbs_rq.h"
 #include "cbs_task.h"
+#include <linux/hrtimer.h>
 #include "../../sched/sched.h"
 #ifdef CONFIG_MOKER_TRACING
 #include "../trace/trace.h"
 #endif
 
+
 static inline struct task_struct *cbs_task_of(struct sched_cbs_entity *cbs_se)
 {
 	return container_of(cbs_se, struct task_struct, cbs);
 }
+
+
+static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer *timer)
+{
+	struct rq *rq;
+	struct rq_flags rflags;
+	struct task_struct *p;
+	struct sched_cbs_entity *cbs_se;
+
+	cbs_se = container_of(timer, struct sched_cbs_entity, hr_deadline);
+	p = cbs_task_of(cbs_se);
+
+	rq = task_rq_lock(p, &rflags); /* Grab the rq this task belongs to */
+
+	update_rq_clock(rq); /* Requires rq_lock */
+
+	/*
+	 * We don't actually want to do anything but log something.
+	 * We assume schedulability analysis was performed.
+	 */
+	trace_printk("MOKER: [id:%d] Deadline not met\n", cbs_se->id);
+
+	task_rq_unlock(rq, &rflags);
+
+	return HRTIMER_NORESTART;
+}
+
+
+static void sched_cbs_entity_hr_deadline_arm(struct sched_cbs_entity *p)
+{
+	struct hrtimer *timer;
+	ktime_t deadline;
+	enum hrtimer_mode mode;
+
+	timer = &p->hr_deadline;
+	deadline = ns_to_ktime(p.deadline);
+	mode = HRTIMER_MODE_ABS_HARD;
+
+	hrtimer_start(timer, deadline, mode);
+}
+
+
+static void sched_cbs_entity_hr_deadline_disarm(struct sched_cbs_entity *p)
+{
+	struct hrtimer *timer;
+
+	timer = &p->hr_deadline;
+
+	hrtimer_try_to_cancel(timer);
+}
+
 
 static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 {
@@ -23,7 +76,7 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	cbs_se = &p->cbs;
 	cbs_rq = &rq->cbs;
 
-	if(WARN_ON_ONCE(cbs_se->on_rq)) {
+	if(cbs_se->on_rq) {
 		raw_spin_unlock(&rq->cbs.lock);
 		return;
 	}
@@ -32,12 +85,12 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	// 1. calculate deadline, d = now + period
 	cbs_se->deadline = now + cbs_se->period;
-	pr_info("Moker[id:%d]: Calculated Deadline[:%llu]\n",
-		cbs_se->id, (unsigned long long)cbs_se->deadline);
+	trace_printk("MOKER: [id:%d] Calculated Deadline[:%llu]\n",
+		     cbs_se->id, (unsigned long long)cbs_se->deadline);
 
-	// 2. insert on tree
+	// 2. insert in tree
 	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
-	pr_info("MOKER: Inserted [id:%d] on tree\n", cbs_se->id);
+	trace_printk("MOKER: [id:%d] Inserted on tree\n", cbs_se->id);
 
 	// 3. mark task as part of the rq
         cbs_se->on_rq = 1;
@@ -62,16 +115,19 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	cbs_se = &p->cbs;
 	cbs_rq = &rq->cbs;
 
-	if(WARN_ON_ONCE(!cbs_se->on_rq)) {
+	if(!cbs_se->on_rq) {
 		raw_spin_unlock(&rq->cbs.lock);
 		return false;
 	}
 
-	// 1. erase task from rq
-	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
-	pr_info("MOKER: Erased [id:%d] from tree\n", cbs_se->id);
+	// 1. disarm hr_deadline
+	sched_cbs_entity_hr_deadline_disarm(cbs_se);
 
-	// 2. mark task as not part of the rq
+	// 2. erase task from rq
+	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
+	trace_printk("MOKER: [id:%d] Erased from tree\n", cbs_se->id);
+
+	// 3. mark task as not part of the rq
 	cbs_se->on_rq = 0;
 	cbs_rq->nr_running--;
 	sub_nr_running(rq, 1);
@@ -88,7 +144,6 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 {
         struct task_struct *curr;
-	s64 diff;
 
 	curr = rq->curr;
 
@@ -97,11 +152,9 @@ static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 		return;
 	}
 
-	diff = (s64)(p->cbs.deadline - curr->cbs.deadline);
-
-        if (diff < 0) {
-		pr_info("Moker: Preempting: out:[id:%d] in:[id:%d]\n",
-			curr->cbs.id, p->cbs.id);
+        if (p->cbs.deadline < curr->cbs.deadline) {
+		trace_printk("MOKER: [id:%d] Preempted by [id:%d]\n",
+			     curr->cbs.id, p->cbs.id);
                 resched_curr(rq);
 	}
 }
@@ -128,7 +181,7 @@ static struct task_struct *pick_task_cbs(struct rq *rq, struct rq_flags *rf)
 	picked = cbs_task_of(container_of(leftmost,
 					  struct sched_cbs_entity,
 					  rb_node));
-	pr_info("Moker: Picked [id:%d]\n", picked->cbs.id);
+	trace_printk("MOKER: [id:%d] Picked\n", picked->cbs.id);
 
 	raw_spin_unlock(&rq->cbs.lock);
 
@@ -137,12 +190,23 @@ static struct task_struct *pick_task_cbs(struct rq *rq, struct rq_flags *rf)
 
 
 static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
-                               struct task_struct *next)
+			      struct task_struct *next)
 {}
 
 
-static void set_next_task_cbs(struct rq *rq, struct task_struct *task, bool first)
-{}
+static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
+{
+	struct cbs_rq *rq;
+	struct sched_cbs_se *cbs_se;
+
+	rq = &rq->cbs;
+	cbs_se = &p->cbs;
+
+	if(!first)
+		return;
+
+	sched_cbs_entity_hr_deadline_arm(cbs_se);
+}
 
 
 static int select_task_rq_cbs(struct task_struct *p, int cpu, int flags)

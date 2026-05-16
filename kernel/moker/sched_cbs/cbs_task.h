@@ -4,6 +4,7 @@
 
 #include <linux/rbtree_types.h>
 #include <linux/types.h>
+#include <linux/hrtimer.h>
 
 struct sched_cbs_entity {
         struct rb_node rb_node;
@@ -11,6 +12,7 @@ struct sched_cbs_entity {
         u64 runtime;
         u64 period;
 	u64 deadline;
+	struct hrtimer hr_deadline;
 
 	int on_rq;
 	int id;
