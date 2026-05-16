@@ -8,6 +8,9 @@
 #endif
 
 
+static void update_curr_cbs(struct rq *rq);
+
+
 static inline int task_has_cbs_policy(struct task_struct *p)
 {
 	return p->policy == SCHED_CBS;
@@ -17,6 +20,11 @@ static inline int task_has_cbs_policy(struct task_struct *p)
 static inline struct task_struct *cbs_task_of(struct sched_cbs_entity *cbs_se)
 {
 	return container_of(cbs_se, struct task_struct, cbs);
+}
+
+static inline struct sched_cbs_entity *server_cbs_entity_of(struct sched_cbs_entity_server *server)
+{
+	return container_of(server, struct sched_cbs_entity, server);
 }
 
 
@@ -32,6 +40,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 	struct rq_flags rflags;
 	struct task_struct *p;
 	struct sched_cbs_entity *cbs_se;
+	u64 expiry;
 
 	cbs_se = container_of(timer, struct sched_cbs_entity, hr_deadline);
 	p = cbs_task_of(cbs_se);
@@ -40,15 +49,28 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 
 	update_rq_clock(rq); /* Requires rq_lock */
 
-	/*
-	 * We don't actually want to do anything but log something.
-	 * We assume schedulability analysis was performed.
-	 */
-	trace_printk("MOKER: [id:%d] Deadline not met\n", cbs_se->id);
+	if(sched_cbs_entity_is_hard(cbs_se)) {
+		/*
+		 * We don't want to do anything about hard tasks except log something.
+		 * We assume schedulability analysis is a pre-condition.
+		 */
+		trace_printk("MOKER: [id:%d] Deadline not met\n", cbs_se->id);
+
+		task_rq_unlock(rq, p, &rflags);
+
+		return HRTIMER_NORESTART;
+	}
+
+	expiry = ktime_to_ns(hrtimer_get_expires(timer));
+	if(cbs_se->deadline <= expiry) {
+		trace_printk("MOKER: [id:%d] Deadline wasn't postponed\n", cbs_se->id);
+	}
+
+	hrtimer_set_expires(timer, ns_to_ktime(cbs_se->deadline));
 
 	task_rq_unlock(rq, p, &rflags);
 
-	return HRTIMER_NORESTART;
+	return HRTIMER_RESTART;
 }
 
 
@@ -103,22 +125,33 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	struct cbs_rq *cbs_rq;
 	struct task_struct *p;
 	struct sched_cbs_entity *cbs_se;
+	struct sched_cbs_entity_server *server;
 
 	server = container_of(timer, struct sched_cbs_entity_server, hr_replenish);
-	/* TODO: Impl cbs_se_of(server) */
 	cbs_se = container_of(server, struct sched_cbs_entity, server);
 	p = cbs_task_of(cbs_se);
-
-	rq = task_rq_lock(p, &rflags); /* Grab the rq this task belongs to */
-	cbs_rq =
+	rq = task_rq_lock(p, &rflags); /* Returns the rq this task belongs to */
+	cbs_rq = &rq->cbs;
 
 	update_rq_clock(rq); /* Requires rq_lock */
+
+	raw_spin_lock(cbs_rq->lock);
 
 	// 1. replenish server's remaining budget
 	cbs_se->server.remaining_budget = cbs_se->server.capacity;
 
-	// 2. requeue task
+	/*
+	 * 2. postpone deadline
+	 * This will effectively re-arm the deadline timer as well,
+	 * since in its callback we compare the timer's expiry to task's deadline.
+	 */
+	cbs_se->deadline = cbs_se->deadline + cbs_se->period;
+
+	// 3. requeue task
+	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
 	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
+
+	raw_spin_unlock(cbs_rq->lock);
 
 	task_rq_unlock(rq, p, &rflags);
 
@@ -148,6 +181,11 @@ static void sched_cbs_entity_hr_replenish_arm(struct sched_cbs_entity *p)
 	struct hrtimer *timer;
 	ktime_t fire_at;
 	enum hrtimer_mode mode;
+
+	if(p->server.remaining_budget <= 0) {
+		trace_printk("MOKER: [id:%d] Replenish is <=0\n", cbs_se->id);
+		return;
+	}
 
 	timer = &p->server.hr_replenish;
 	fire_at = ns_to_ktime(p->server.remaining_budget);
@@ -257,7 +295,7 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	sched_cbs_entity_hr_deadline_arm(cbs_se);
 	trace_printk("MOKER: [id:%d] Dead armed\n", cbs_se->id);
 
-	// 4. mark task as part of the rq
+	// 5. mark task as part of the rq
         cbs_se->on_rq = 1;
         add_nr_running(rq, 1);
 
@@ -362,6 +400,8 @@ static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
 	struct sched_cbs_entity *cbs_se;
 	int is_disarmed;
 
+	cbs_se = &p->cbs;
+
 	if(sched_cbs_entity_is_hard(cbs_se))
 		return;
 
@@ -370,6 +410,7 @@ static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
 
 	// 2. cancel the budget tracking timer
 	is_disarmed = sched_cbs_entity_hr_replenish_disarm(cbs_se);
+
 	trace_printk("MOKER: [id:%d] Replen disarmed [status:%d]\n",
 		     cbs_se->id, is_disarmed);
 }
@@ -389,8 +430,8 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 	if(sched_cbs_entity_is_hard(cbs_se))
 		return;
 
-	// 1. time task execution start
-	cbs_se->exec_start = now;
+	// 1. time the task's execution start
+	cbs_se->slice_start = now;
 
 	// 2. arm replenish to relative time from server.remaining_budget
 	sched_cbs_entity_hr_replenish_arm(cbs_se);
@@ -421,20 +462,35 @@ static void switched_to_cbs(struct rq *rq, struct task_struct *task)
 static void update_curr_cbs(struct rq *rq)
 {
 	struct task_struct *donor; /* Add documentation for donor */
-	struct sched_cbs_se *cbs_se;
+	struct sched_cbs_entity *cbs_se;
 	u64 now;
 	u64 delta;
 
 	donor = rq->donor;
-	cbs_se = &donor;
+	cbs_se = &donor->cbs;
 	now = ktime_get_ns();
 
 	if(sched_cbs_entity_is_hard(cbs_se))
 		return;
 
+	if(!cbs_se->slice_start) {
+		cbs_se->slice_start = now;
+		return;
+	}
+
 	/* Update server.remaining_budget */
-	delta = now - cbs_se->exec_start;
-	cbs_se->server.remaining_budget = cbs_se->server.remaining_budget - delta;
+	delta = now - cbs_se->slice_start;
+
+	/* check for underflow */
+	if(cbs_se->server.remaining_budget > delta) {
+		cbs_se->server.remaining_budget -= delta;
+	} else {
+		cbs_se->server.remaining_budget = 0;
+	}
+
+	/* update tick */
+	cbs_se->slice_start = now;
+
 	trace_printk("MOKER: [id:%d] [rem_runtime:%llu]\n",
 		     cbs_se->id, cbs_se->server.remaining_budget);
 }
