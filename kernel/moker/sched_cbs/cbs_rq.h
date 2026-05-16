@@ -10,7 +10,6 @@
 struct cbs_rq {
         struct rb_root_cached   tasks_tree; /* leftmost node is memoized */
 	raw_spinlock_t          lock;
-	unsigned int            nr_running;
 };
 
 

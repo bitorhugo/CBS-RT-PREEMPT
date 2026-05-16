@@ -7,8 +7,7 @@ void init_cbs_rq(struct cbs_rq *rq)
 {
         rq->tasks_tree = RB_ROOT_CACHED;
 	raw_spin_lock_init(&rq->lock);
-        rq->nr_running = 0;
-	pr_info("MOKER: CBS RQ initialized");
+	trace_printk("MOKER: CBS RQ initialized");
 }
 
 bool cbs_rq_less(struct rb_node *this, const struct rb_node *that)
