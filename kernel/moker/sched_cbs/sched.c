@@ -238,7 +238,7 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 
 	/* Start deadline countdown */
 	sched_cbs_entity_hr_deadline_arm(cbs_se);
-	trace_printk("MOKER: [id:%d] Timer armed\n", picked->cbs.id);
+	trace_printk("MOKER: [id:%d] Timer armed\n", cbs_se->id);
 }
 
 
