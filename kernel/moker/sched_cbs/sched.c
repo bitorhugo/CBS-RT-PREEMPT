@@ -135,7 +135,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 
 	update_rq_clock(rq); /* Requires rq_lock */
 
-	raw_spin_lock(cbs_rq->lock);
+	raw_spin_lock(&cbs_rq->lock);
 
 	// 1. replenish server's remaining budget
 	cbs_se->server.remaining_budget = cbs_se->server.capacity;
@@ -151,7 +151,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
 	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
 
-	raw_spin_unlock(cbs_rq->lock);
+	raw_spin_unlock(&cbs_rq->lock);
 
 	task_rq_unlock(rq, p, &rflags);
 
