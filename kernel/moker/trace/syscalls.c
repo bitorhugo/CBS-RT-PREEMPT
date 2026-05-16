@@ -27,32 +27,35 @@ int set_moker_tracing(unsigned int toggle)
 }
 
 
-int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadline)
+
+SYSCALL_DEFINE5(moker_sched_cbs_entity_setup,
+		int, id,
+		u64, runtime,
+		u64, period,
+		u64, deadline,
+		int, is_hard)
+{
+	pr_info("MOKER: sys_sched_cbs_entity_setup:[pid=%d][id=%d][is_hard=%d][c=%llu][t=%llu][d=%llu]\n",
+		current->pid, id, is_hard, runtime, period, deadline);
+
+	#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
+	return do_moker_sched_cbs_entity_setup(id, runtime, period, deadline, is_hard);
+	#else
+	return -1;
+	#endif
+}
+
+int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadline, int is_hard)
 {
 	current->cbs.id       = id;
 	current->cbs.runtime  = runtime;
 	current->cbs.period   = period;
 	current->cbs.deadline = deadline;
+	if(is_hard)
+		currnet->cbs_server   = NULL;
 
 	return sched_setscheduler(current,
 				  SCHED_CBS,
 				  &(struct sched_param){ .sched_priority = 0});
 
-}
-
-
-SYSCALL_DEFINE4(do_moker_sched_cbs_entity_setup,
-		int, id,
-		u64, runtime,
-		u64, period,
-		u64, deadline)
-{
-	pr_info("MOKER: sys_moker_id_c_t_d:[pid=%d][id=%d][c=%llu][t=%llu][d=%llu]\n",
-		current->pid, id, runtime, period, deadline);
-
-	#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
-	return do_moker_sched_cbs_entity_setup(id, runtime, period, deadline);
-	#else
-	return -1;
-	#endif
 }
