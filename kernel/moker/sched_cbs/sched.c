@@ -30,7 +30,7 @@ static inline struct sched_cbs_entity *server_cbs_entity_of(struct sched_cbs_ent
 
 static inline int sched_cbs_entity_is_hard(struct sched_cbs_entity *p)
 {
-	return !p->server;
+	return p->server.capacity != 0; /* TODO: Review this */
 }
 
 
