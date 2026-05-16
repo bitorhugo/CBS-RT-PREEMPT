@@ -40,6 +40,23 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 }
 
 
+static void sched_cbs_entity_hr_deadline_setup(struct sched_cbs_entity *p)
+{
+	struct hrtimer *timer;
+	clockid_t clock_id;
+	enum hrtimer_mode mode;
+
+	timer = &p->hr_deadline;
+	clock_id = CLOCK_MONOTONIC;
+	mode = HRTIMER_MODE_ABS_HARD;
+
+	hrtimer_setup(timer,
+		      sched_cbs_entity_hr_deadline_callback,
+		      clock_id,
+		      mode);
+}
+
+
 static void sched_cbs_entity_hr_deadline_arm(struct sched_cbs_entity *p)
 {
 	struct hrtimer *timer;
@@ -91,7 +108,10 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
 	trace_printk("MOKER: [id:%d] Inserted on tree\n", cbs_se->id);
 
-	// 3. mark task as part of the rq
+	// 3. setup deadline timer
+	sched_cbs_entity_hr_deadline_setup(cbs_se);
+
+	// 4. mark task as part of the rq
         cbs_se->on_rq = 1;
 	cbs_rq->nr_running++;
         add_nr_running(rq, 1);
@@ -195,13 +215,14 @@ static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
 
 static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 {
-	struct sched_cbs_se *cbs_se;
+	struct sched_cbs_entity *cbs_se;
 
 	cbs_se = &p->cbs;
 
 	if(!first)
 		return;
 
+	/* Start deadline countdown */
 	sched_cbs_entity_hr_deadline_arm(cbs_se);
 }
 
