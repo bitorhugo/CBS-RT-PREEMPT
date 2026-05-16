@@ -37,9 +37,9 @@ SYSCALL_DEFINE4(moker_sched_cbs_entity_setup,
 	pr_info("MOKER: sys_sched_cbs_entity_setup:[pid=%d][id=%d][c=%llu][t=%llu][d=%llu]\n",
 		current->pid,
 		id,
-		is_hard,
 		(unsigned long long)runtime,
-		(unsigned long long)period;
+		(unsigned long long)period,
+		(unsigned long long)deadline;
 
 	#ifdef CONFIG_MOKER_SCHED_CBS_POLICY
 	return do_moker_sched_cbs_entity_setup(id, runtime, period, deadline);
