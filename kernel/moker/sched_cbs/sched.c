@@ -67,6 +67,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 	}
 
 	hrtimer_set_expires(timer, ns_to_ktime(cbs_se->deadline));
+	trace_printk("MOKER: [id:%d] Deadline postponed [D=%llu]\n", cbs_se->id, cbs_se->deadline);
 
 	task_rq_unlock(rq, p, &rflags);
 
@@ -125,6 +126,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	struct cbs_rq *cbs_rq;
 	struct task_struct *p;
 	struct sched_cbs_entity *cbs_se;
+	srtuct sched_cbs_entity *cbs_curr;
 	struct sched_cbs_entity_server *server;
 
 	server = container_of(timer, struct sched_cbs_entity_server, hr_replenish);
@@ -136,6 +138,9 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	update_rq_clock(rq); /* Requires rq_lock */
 
 	raw_spin_lock(&cbs_rq->lock);
+
+	if(!cbs_se->on_rq)
+		goto unlock;
 
 	// 1. replenish server's remaining budget
 	cbs_se->server.remaining_budget = cbs_se->server.capacity;
@@ -149,8 +154,18 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 
 	// 3. requeue task
 	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
+	RB_CLEAR_NODE(&cbs_se->rb_node);
 	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
 
+	// 4. resched_curr if needed
+	if(rb_first_cached(&cbs_rq->tasks_tree) == &cbs_se->rb_node) {
+		cbs_curr = &rq->curr->cbs;
+
+		if(cbs_curr->deadline > cbs_se->deadline)
+			resched_curr(rq);
+	}
+
+unlock:
 	raw_spin_unlock(&cbs_rq->lock);
 
 	task_rq_unlock(rq, p, &rflags);
@@ -167,7 +182,7 @@ static void sched_cbs_entity_hr_replenish_setup(struct sched_cbs_entity *p)
 
 	timer = &p->server.hr_replenish;
 	clock_id = CLOCK_MONOTONIC;
-	mode = HRTIMER_MODE_ABS_HARD;
+	mode = HRTIMER_MODE_REL_HARD;
 
 	hrtimer_setup(timer,
 		      sched_cbs_entity_hr_replenish_callback,
@@ -250,9 +265,7 @@ static void sched_cbs_entity_calc_deadline(struct sched_cbs_entity *p, u64 arriv
 		return;
 	}
 
-	/*
-	 * 2. if (cs * Ts >= (di - ri) * Qs/Ts), then generate new deadline
-	 */
+	/* 2. if (cs * Ts >= (di - ri) * Qs), then generate new deadline */
 	lhs = p->runtime * p->period;
 	rhs = (u64)diff * p->server.capacity;
 	if (lhs >= rhs)
@@ -336,6 +349,7 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	// 2. erase task from rq
 	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
+	RB_CLEAR_NODE(&cbs_se->rb_node);
 	trace_printk("MOKER: [id:%d] Erased from tree\n", cbs_se->id);
 
 	// 3. mark task as not part of the rq
@@ -379,8 +393,8 @@ static struct task_struct *pick_task_cbs(struct rq *rq, struct rq_flags *rf)
 
 	leftmost = rb_first_cached(&rq->cbs.tasks_tree);
 	if (!leftmost) {
-		raw_spin_unlock(&rq->cbs.lock);
-		return NULL;
+		picked = NULL;
+		goto unlock;
 	}
 
 	picked = cbs_task_of(container_of(leftmost,
@@ -388,6 +402,7 @@ static struct task_struct *pick_task_cbs(struct rq *rq, struct rq_flags *rf)
 					  rb_node));
 	trace_printk("MOKER: [id:%d] Picked\n", picked->cbs.id);
 
+unlock:
 	raw_spin_unlock(&rq->cbs.lock);
 
 	return picked;
@@ -490,9 +505,6 @@ static void update_curr_cbs(struct rq *rq)
 
 	/* update tick */
 	cbs_se->slice_start = now;
-
-	trace_printk("MOKER: [id:%d] [rem_runtime:%llu]\n",
-		     cbs_se->id, cbs_se->server.remaining_budget);
 }
 
 
