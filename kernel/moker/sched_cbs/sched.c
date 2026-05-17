@@ -126,7 +126,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	struct cbs_rq *cbs_rq;
 	struct task_struct *p;
 	struct sched_cbs_entity *cbs_se;
-	srtuct sched_cbs_entity *cbs_curr;
+	struct sched_cbs_entity *cbs_curr;
 	struct sched_cbs_entity_server *server;
 
 	server = container_of(timer, struct sched_cbs_entity_server, hr_replenish);
