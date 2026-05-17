@@ -299,7 +299,6 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	// 2. insert in tree
 	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
-	trace_printk("MOKER: [id:%d] Inserted on tree\n", cbs_se->id);
 
 	// 3. setup deadline & replenish timers
 	sched_cbs_entity_hr_timers_setup(cbs_se);
@@ -350,7 +349,6 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	// 2. erase task from rq
 	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
 	RB_CLEAR_NODE(&cbs_se->rb_node);
-	trace_printk("MOKER: [id:%d] Erased from tree\n", cbs_se->id);
 
 	// 3. mark task as not part of the rq
 	cbs_se->on_rq = 0;
@@ -372,7 +370,6 @@ static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 	curr = rq->curr;
 
         if (!task_has_cbs_policy(p)) {
-                resched_curr(rq);
 		return;
 	}
 
