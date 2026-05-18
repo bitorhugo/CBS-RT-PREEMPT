@@ -319,8 +319,6 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	raw_spin_lock(&rq->cbs.lock);
 
-	trace_printk("MOKER:[id:%d]\n", cbs_se->id)
-
 	cbs_se = &p->cbs;
 	cbs_rq = &rq->cbs;
 
