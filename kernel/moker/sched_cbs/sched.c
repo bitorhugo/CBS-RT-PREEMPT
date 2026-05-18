@@ -297,14 +297,17 @@ static void sched_cbs_entity_calc_deadline(struct sched_cbs_entity *p, u64 arriv
 	diff = (s64)(p->deadline - arrival);
 	if (diff <= 0) {
 		p->deadline = arrival + p->period;
+		p->server.remaining_budget = p->server.capacity;
 		return;
 	}
 
 	/* 2. if (cs * Ts >= (di - ri) * Qs), then generate new deadline */
 	lhs = p->runtime * p->period;
 	rhs = (u64)diff * p->server.capacity;
-	if (lhs >= rhs)
+	if (lhs >= rhs) {
 		p->deadline = arrival + p->period;
+		p->server.remaining_budget = p->server.capacity;
+	}
 }
 
 
