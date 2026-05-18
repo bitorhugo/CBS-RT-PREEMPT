@@ -16,21 +16,27 @@ static inline int task_has_cbs_policy(struct task_struct *p)
 	return p->policy == SCHED_CBS;
 }
 
-
 static inline struct task_struct *cbs_task_of(struct sched_cbs_entity *cbs_se)
 {
 	return container_of(cbs_se, struct task_struct, cbs);
 }
 
-static inline struct sched_cbs_entity *server_cbs_entity_of(struct sched_cbs_entity_server *server)
-{
-	return container_of(server, struct sched_cbs_entity, server);
-}
-
-
 static inline int sched_cbs_entity_is_hard(struct sched_cbs_entity *p)
 {
 	return p->server.capacity != 0; /* TODO: Review this */
+}
+
+static inline void sched_cbs_entity_server_update(struct sched_cbs_entity *p, u64 now)
+{
+	u64 delta;
+
+	delta = now - p->slice_start;
+
+	if(p->server.remaining_budget > delta) {
+		p->server.remaining_budget -= delta;
+	} else {
+		p->server.remaining_budget = 0;
+	}
 }
 
 
@@ -126,11 +132,12 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	struct cbs_rq *cbs_rq;
 	struct task_struct *p;
 	struct sched_cbs_entity *cbs_se;
-	struct sched_cbs_entity *cbs_curr;
-	struct sched_cbs_entity_server *server;
 
-	server = container_of(timer, struct sched_cbs_entity_server, hr_replenish);
-	cbs_se = container_of(server, struct sched_cbs_entity, server);
+	cbs_se = container_of(container_of(timer,
+					   struct sched_cbs_entity_server,
+					   hr_replenish),
+			      struct sched_cbs_entity,
+			      server);
 	p = cbs_task_of(cbs_se);
 	rq = task_rq_lock(p, &rflags); /* Returns the rq this task belongs to */
 	cbs_rq = &rq->cbs;
@@ -138,9 +145,6 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	update_rq_clock(rq); /* Requires rq_lock */
 
 	raw_spin_lock(&cbs_rq->lock);
-
-	if(!cbs_se->on_rq)
-		goto unlock;
 
 	// 1. replenish server's remaining budget
 	cbs_se->server.remaining_budget = cbs_se->server.capacity;
@@ -152,20 +156,30 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	 */
 	cbs_se->deadline = cbs_se->deadline + cbs_se->period;
 
-	// 3. requeue task
-	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
-	RB_CLEAR_NODE(&cbs_se->rb_node);
-	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
+	if (cbs_se->on_rq) {
+		// 3. requeue task
+		rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
+		RB_CLEAR_NODE(&cbs_se->rb_node);
+		rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
 
-	// 4. resched_curr if needed
-	if(rb_first_cached(&cbs_rq->tasks_tree) == &cbs_se->rb_node) {
-		cbs_curr = &rq->curr->cbs;
-
-		if(cbs_curr->deadline > cbs_se->deadline)
+		// 4. resched_curr if needed
+		if(!task_has_cbs_policy(rq->curr)) {
 			resched_curr(rq);
+		} else {
+			struct rb_node *leftmost;
+			/* if task on CPU isn't the leftmost on rq, resched it */
+			leftmost = rb_first_cached(&cbs_rq->tasks_tree);
+			if(leftmost) {
+				struct sched_cbs_entity *leftmost_se;
+				leftmost_se = container_of(leftmost,
+							   struct sched_cbs_entity,
+							   rb_node);
+				if(cbs_task_of(leftmost_se) != rq->curr)
+					resched_curr(rq);
+			}
+		}
 	}
 
-unlock:
 	raw_spin_unlock(&cbs_rq->lock);
 
 	task_rq_unlock(rq, p, &rflags);
@@ -330,6 +344,7 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
         struct sched_cbs_entity *cbs_se;
         struct cbs_rq           *cbs_rq;
 	int is_disarmed;
+	u64 now;
 
 	raw_spin_lock(&rq->cbs.lock);
 
@@ -350,7 +365,15 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
 	RB_CLEAR_NODE(&cbs_se->rb_node);
 
-	// 3. mark task as not part of the rq
+	now = ktime_get_ns();
+
+	// 3. update remaining_budget
+	sched_cbs_entity_server_update(cbs_se, now);
+
+	// 4. update slice_start
+	cbs_se->slice_start = now;
+
+	// 5. mark task as not part of the rq
 	cbs_se->on_rq = 0;
 	sub_nr_running(rq, 1);
 
@@ -363,15 +386,20 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 }
 
 
+/* @p: task that wants CPU */
 static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 {
         struct task_struct *curr;
 
 	curr = rq->curr;
 
-        if (!task_has_cbs_policy(p)) {
+	if(!task_has_cbs_policy(curr)) {
+		resched_curr(rq);
 		return;
 	}
+
+	if(!task_has_cbs_policy(p))
+		return;
 
         if (p->cbs.deadline < curr->cbs.deadline) {
 		trace_printk("MOKER: [id:%d] Preempted by [id:%d]\n",
@@ -406,28 +434,37 @@ unlock:
 }
 
 
-static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
-			      struct task_struct *next)
+/*
+ * @p: task currently on CPU
+ * @next: task to run next on CPU
+*/
+static void put_prev_task_cbs(struct rq *rq, struct task_struct *p, struct task_struct *next)
 {
 	struct sched_cbs_entity *cbs_se;
+	u64 now;
 	int is_disarmed;
 
 	cbs_se = &p->cbs;
 
+	if (!task_has_cbs_policy(p))
+		return;
+
 	if(sched_cbs_entity_is_hard(cbs_se))
 		return;
 
+	now = ktime_get_ns();
+
 	// 1. update server's remaining_budget
-	update_curr_cbs(rq);
+	sched_cbs_entity_server_update(cbs_se, now);
 
 	// 2. cancel the budget tracking timer
 	is_disarmed = sched_cbs_entity_hr_replenish_disarm(cbs_se);
-
 	trace_printk("MOKER: [id:%d] Replen disarmed [status:%d]\n",
 		     cbs_se->id, is_disarmed);
 }
 
 
+/* @p: task to run next on CPU */
 static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 {
 	struct sched_cbs_entity *cbs_se;
@@ -439,11 +476,11 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 	if(!first)
 		return;
 
-	if(sched_cbs_entity_is_hard(cbs_se))
-		return;
-
 	// 1. time the task's execution start
 	cbs_se->slice_start = now;
+
+	if(sched_cbs_entity_is_hard(cbs_se))
+		return;
 
 	// 2. arm replenish to relative time from server.remaining_budget
 	sched_cbs_entity_hr_replenish_arm(cbs_se);
@@ -473,14 +510,18 @@ static void switched_to_cbs(struct rq *rq, struct task_struct *task)
 
 static void update_curr_cbs(struct rq *rq)
 {
-	struct task_struct *donor; /* Add documentation for donor */
+	struct task_struct *curr;
 	struct sched_cbs_entity *cbs_se;
 	u64 now;
 	u64 delta;
 
-	donor = rq->donor;
-	cbs_se = &donor->cbs;
+	curr = rq->curr;
+	cbs_se = &curr->cbs;
 	now = ktime_get_ns();
+
+	if(!task_has_cbs_policy(curr)) {
+		return;
+	}
 
 	if(sched_cbs_entity_is_hard(cbs_se))
 		return;
