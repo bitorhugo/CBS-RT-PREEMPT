@@ -128,16 +128,16 @@ int main(int argc, char **argv)
 	printf("Task(id[%d], pid[%d], is_hard[%d]): before SCHED_CBS\n",
 	       task_id, getpid(), is_hard);
 
-	C = (unsigned long long)atoll(argv[2]);
-	T = D = (unsigned long long)atoll(argv[3]);
-	O = (unsigned long long)atoll(argv[4]) + OFFSET;
-	time0 = (unsigned long long)atoll(argv[5]);
-	njobs = atoi(argv[6]);
+	C = (unsigned long long)atoll(argv[3]);
+	T = D = (unsigned long long)atoll(argv[4]);
+	O = (unsigned long long)atoll(argv[5]) + OFFSET;
+	time0 = (unsigned long long)atoll(argv[6]);
+	njobs = atoi(argv[7]);
 
 	printf("Task(id[%d], pid[%d], is_hard[%d]): setup ID\n",
 	       task_id, getpid(), is_hard);
 
-	if((syscall(SYS_MOKER_TASK_SETUP, task_id, C, T, D)) < 0) {
+	if((syscall(SYS_MOKER_TASK_SETUP, task_id, C, T, D, is_hard)) < 0) {
 		perror("ERROR: Setting MOKER_TASK_SETUP failed");
 		exit(-1);
 	}

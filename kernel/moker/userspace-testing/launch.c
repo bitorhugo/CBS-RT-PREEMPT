@@ -78,6 +78,7 @@ void get_task_info(char * str, struct task *task)
 				task->is_hard = get_u32(s1);
 				s1 = s + 1;
 				i++;
+				break;
 			case 2:
 				task->C = get_u64(s1);
 				s1 = s + 1;
@@ -140,7 +141,7 @@ int main(int argc, char *argv[])
 	pid_t pid_tasks[NR_TASKS];
 	struct task tasks[NR_TASKS];
 	unsigned int ntasks;
-	char arg[7][30];
+	char arg[6][30];
 	struct timespec t;
 	unsigned long long time0;
 	int status;
