@@ -38,8 +38,6 @@ static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
 		p->server.remaining_budget = 0;
 	}
 
-	trace_printk("[id:%d] [rem_budget:%llu]\n", p->id, p->server.remaining_budget);
-
 	p->slice_start = now;
 }
 
@@ -83,7 +81,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 	hrtimer_set_expires(timer, ns_to_ktime(cbs_se->deadline));
 	trace_printk("[id:%d] Deadline updated [D=%llu]\n",
 		     cbs_se->id,
-		     cbs_se->deadline);
+		     (unsigned long long)cbs_se->deadline);
 
 	task_rq_unlock(rq, p, &rflags);
 
@@ -198,8 +196,8 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 
 	trace_printk("[id:%d] Budget Replenished [Budget=%llu] [D=%llu]\n",
 		     cbs_se->id,
-		     cbs_se->server.remaining_budget,
-		     cbs_se->deadline);
+		     (unsigned long long)cbs_se->server.remaining_budget,
+		     (unsigned long long)cbs_se->deadline);
 
 	raw_spin_unlock(&cbs_rq->lock);
 
