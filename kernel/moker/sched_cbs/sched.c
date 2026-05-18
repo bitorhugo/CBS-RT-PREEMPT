@@ -39,9 +39,6 @@ static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
 	}
 
 	p->slice_start = now;
-
-	trace_printk("MOKER: [id:%d] Updated [rem_bud:%llu] [slice_s:%llu]\n",
-		     p->id, p->server.remaining_budget, p->slice_start);
 }
 
 
@@ -75,6 +72,10 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 	expiry = ktime_to_ns(hrtimer_get_expires(timer));
 	if(cbs_se->deadline <= expiry) {
 		trace_printk("MOKER: [id:%d] Deadline wasn't postponed\n", cbs_se->id);
+
+		task_rq_unlock(rq, p, &rflags);
+
+		return HRTIMER_NORESTART;
 	}
 
 	hrtimer_set_expires(timer, ns_to_ktime(cbs_se->deadline));
@@ -137,6 +138,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	struct cbs_rq *cbs_rq;
 	struct task_struct *p;
 	struct sched_cbs_entity *cbs_se;
+	u64 now;
 
 	cbs_se = container_of(container_of(timer,
 					   struct sched_cbs_entity_server,
@@ -151,6 +153,8 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 
 	raw_spin_lock(&cbs_rq->lock);
 
+	now = ktime_get_ns();
+
 	// 1. replenish server's remaining budget
 	cbs_se->server.remaining_budget = cbs_se->server.capacity;
 
@@ -161,8 +165,11 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	 */
 	cbs_se->deadline = cbs_se->deadline + cbs_se->period;
 
+	// 3. update slice_start
+	cbs_se->slice_start = now;
+
 	if (cbs_se->on_rq) {
-		// 3. requeue task
+		// 4. requeue task
 		rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
 		RB_CLEAR_NODE(&cbs_se->rb_node);
 		rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
@@ -373,7 +380,8 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	now = ktime_get_ns();
 
 	// 3. update remaining_budget
-	sched_cbs_entity_update(cbs_se, now);
+	if(p == rq->curr)
+		sched_cbs_entity_update(cbs_se, now);
 
 	// 4. mark task as not part of the rq
 	cbs_se->on_rq = 0;
@@ -475,18 +483,18 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 	cbs_se = &p->cbs;
 	now = ktime_get_ns();
 
-	if(!first)
-		return;
-
 	// 1. time the task's execution start
-	cbs_se->slice_start = now;
+	if(first)
+		cbs_se->slice_start = now;
 
 	if(sched_cbs_entity_is_hard(cbs_se))
 		return;
 
 	// 2. arm replenish to relative time from server.remaining_budget
-	sched_cbs_entity_hr_replenish_arm(cbs_se);
-	trace_printk("MOKER: [id:%d] Replen armed\n", cbs_se->id);
+	if(!hrtimer_active(&cbs_se->server.hr_replenish)) {
+		sched_cbs_entity_hr_replenish_arm(cbs_se);
+		trace_printk("MOKER: [id:%d] Replen armed\n", cbs_se->id);
+	}
 }
 
 
