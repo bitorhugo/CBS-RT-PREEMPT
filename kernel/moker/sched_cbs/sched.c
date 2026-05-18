@@ -26,7 +26,7 @@ static inline int sched_cbs_entity_is_hard(struct sched_cbs_entity *p)
 	return p->server.capacity != 0; /* TODO: Review this */
 }
 
-static inline void sched_cbs_entity_server_update(struct sched_cbs_entity *p, u64 now)
+static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
 {
 	u64 delta;
 
@@ -37,6 +37,11 @@ static inline void sched_cbs_entity_server_update(struct sched_cbs_entity *p, u6
 	} else {
 		p->server.remaining_budget = 0;
 	}
+
+	p->slice_start = now;
+
+	trace_printk("MOKER: [id:%d] Updated [rem_bud:%llu] [slice_s:%llu]\n",
+		     p->id, p->server.remaining_budget, p->slice_start);
 }
 
 
@@ -368,12 +373,9 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	now = ktime_get_ns();
 
 	// 3. update remaining_budget
-	sched_cbs_entity_server_update(cbs_se, now);
+	sched_cbs_entity_update(cbs_se, now);
 
-	// 4. update slice_start
-	cbs_se->slice_start = now;
-
-	// 5. mark task as not part of the rq
+	// 4. mark task as not part of the rq
 	cbs_se->on_rq = 0;
 	sub_nr_running(rq, 1);
 
@@ -455,7 +457,7 @@ static void put_prev_task_cbs(struct rq *rq, struct task_struct *p, struct task_
 	now = ktime_get_ns();
 
 	// 1. update server's remaining_budget
-	sched_cbs_entity_server_update(cbs_se, now);
+	sched_cbs_entity_update(cbs_se, now);
 
 	// 2. cancel the budget tracking timer
 	is_disarmed = sched_cbs_entity_hr_replenish_disarm(cbs_se);
@@ -510,39 +512,23 @@ static void switched_to_cbs(struct rq *rq, struct task_struct *task)
 
 static void update_curr_cbs(struct rq *rq)
 {
-	struct task_struct *curr;
+	struct task_struct *curr = rq->curr;
 	struct sched_cbs_entity *cbs_se;
 	u64 now;
-	u64 delta;
 
-	curr = rq->curr;
+	if (!task_has_cbs_policy(curr))
+		return;
+
 	cbs_se = &curr->cbs;
+
+	if (sched_cbs_entity_is_hard(cbs_se))
+		return;
+
 	now = ktime_get_ns();
+	sched_cbs_entity_update(cbs_se, now);
 
-	if(!task_has_cbs_policy(curr)) {
-		return;
-	}
-
-	if(sched_cbs_entity_is_hard(cbs_se))
-		return;
-
-	if(!cbs_se->slice_start) {
-		cbs_se->slice_start = now;
-		return;
-	}
-
-	/* Update server.remaining_budget */
-	delta = now - cbs_se->slice_start;
-
-	/* check for underflow */
-	if(cbs_se->server.remaining_budget > delta) {
-		cbs_se->server.remaining_budget -= delta;
-	} else {
-		cbs_se->server.remaining_budget = 0;
-	}
-
-	/* update tick */
-	cbs_se->slice_start = now;
+	if (cbs_se->server.remaining_budget == 0)
+		resched_curr(rq);
 }
 
 
