@@ -130,12 +130,15 @@ int main(int argc, char **argv)
 	unsigned long long time0;
 	unsigned long long release;
 	unsigned int task_id;
+	unsigned int is_hard;
 	unsigned int njobs;
 	int res;
 	struct timespec r;
 
 	task_id = atoi(argv[1]);
-	printf("Task(%d, %d): before SCHED_CBS\n", task_id, getpid());
+	is_hard = atoi(argv[2]);
+	printf("Task(id[%d], pid[%d], is_hard[%d]): before SCHED_CBS\n",
+	       task_id, getpid(), is_hard);
 
 	C = (unsigned long long)atoll(argv[2]);
 	T = (unsigned long long)atoll(argv[3]);
@@ -143,13 +146,16 @@ int main(int argc, char **argv)
 	time0 = (unsigned long long)atoll(argv[5]);
 	njobs = atoi(argv[6]);
 
-	printf("Task(%d,%d): setup ID\n", task_id, getpid());
+	printf("Task(id[%d], pid[%d], is_hard[%d]): setup ID\n",
+	       task_id, getpid(), is_hard);
+
 	if((syscall(SYS_MOKER_TASK_SETUP, task_id, C, T, D)) < 0) {
-		perror("ERROR: Setting moker task setup failed");
+		perror("ERROR: Setting MOKER_TASK_SETUP failed");
 		exit(-1);
 	}
 
-	printf("Task(%d, %d): after SCHED_CBS\n", task_id, getpid());
+	printf("Task(id[%d], pid[%d], is_hard[%d]): after SCHED_CBS\n",
+	       task_id, getpid(), is_hard);
 
 	release = time0 + O;
 
@@ -157,12 +163,12 @@ int main(int argc, char **argv)
 		r.tv_sec = release / NSEC_PER_SEC;
 		r.tv_nsec = release % NSEC_PER_SEC;
 
-		printf("Task(%d, %d, %d): sleeping until %lld\n",
-		       task_id, getpid(), i, release);
+		printf("Task(id[%d], pid[%d], is_hard[%d], job[%d]): sleeping until %lld\n",
+		       task_id, getpid(), is_hard, i, release);
 
 		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &r, NULL);
-		printf("Task(%d, %d, %d): ready for execution\n",
-		       task_id, getpid(), i);
+		printf("Task(id[%d], pid[%d], is_hard[%d], job[%d]): ready for execution\n",
+		       task_id, getpid(), is_hard, i);
 
 		do_work(C);
 
@@ -170,12 +176,4 @@ int main(int argc, char **argv)
 	}
 
 	exit(task_id);
-
-err_sched_setattr:
-	perror("ERROR:sched_setattr failed");
-	exit(res);
-
-err_sched_setscheduler:
-	perror("ERROR:sched_setscheduler failed");
-	exit(res);
 }
