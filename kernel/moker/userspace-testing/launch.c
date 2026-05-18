@@ -118,7 +118,7 @@ void get_taskset_config(char *file, unsigned int *ntasks, struct task *tasks)
 	(*ntasks) = 0;
 
 	while((fgets(buffer, BUF_SIZE, fd)) != NULL) {
-		if(buffer[0] >= '0' || buffer[0] <= '9'){
+		if(buffer[0] >= '0' || buffer[0] <= '9') {
 			get_task_info(buffer, &tasks[i]);
 			i++;
 		}
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
 		pid_tasks[i] = fork();
 		if(pid_tasks[i] == 0) {
 			execl("./task", "task", arg[0], arg[1], arg[2], arg[3],
-			      arg[4], arg[5], NULL);
+			      arg[4], arg[5], arg[6], NULL);
 			printf("Error: execv: task\n");
 			exit(0);
 		}
