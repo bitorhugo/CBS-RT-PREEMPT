@@ -14,8 +14,6 @@
 #include <sys/wait.h>
 #include <sys/syscall.h>
 
-
-
 #define NR_TASKS		50
 #define BUF_SIZE		10000
 
@@ -30,6 +28,7 @@
 
 struct task {
 	int id;
+	int is_hard;
 	unsigned long long C; //exec
 	unsigned long long T; //period
 	unsigned long long O; //first job offset

@@ -27,7 +27,7 @@ unsigned int get_u32(char *s)
 	int d;
 	unsigned int v;
 
-	d = 0
+	d = 0;
 	v = 0;
 
 	for(i = 0; s[i] >= '0' && s[i] <= '9'; i++) {
@@ -61,7 +61,7 @@ void get_task_info(char * str, struct task *task)
 	char *s1;
 	int i;
 
-	i = 0
+	i = 0;
 	s = s1 = str;
 
 	while(i < 6) {
@@ -146,12 +146,12 @@ int main(int argc, char *argv[])
 	int status;
 	int i;
 
-	if(argc!=2)
+	if(argc != 2)
 		exit(0);
 
-	get_taskset_config(argv[1],&ntasks,tasks);
+	get_taskset_config(argv[1], &ntasks, tasks);
 
-	print_tasks(tasks,ntasks);
+	print_tasks(tasks, ntasks);
 
 	printf("LAUNCH: Enabling MOKER_TRACING\n");
 	if((syscall(SYS_MOKER_TRACING_ENABLE, 1)) < 0) {

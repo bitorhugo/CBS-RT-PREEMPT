@@ -1,16 +1,5 @@
 #include "defs.h"
 #include <stdio.h>
-#define _GNU_SOURCE
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <linux/unistd.h>
-#include <linux/kernel.h>
-#include <linux/types.h>
-#include <sys/syscall.h>
-#include <pthread.h>
 
 
 void do_work(unsigned long long exec)
@@ -118,7 +107,6 @@ void do_work(unsigned long long exec)
 		asm volatile  ("nop" ::);
 		asm volatile  ("nop" ::);
 		asm volatile  ("nop" ::);
-
 	}
 }
 
