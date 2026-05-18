@@ -34,7 +34,7 @@ int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadlin
 	current->cbs.period   = period;
 	current->cbs.deadline = deadline;
 
-	if (is_hard == 0) {
+	if (!is_hard) {
 		current->cbs.server = (struct sched_cbs_entity_server){ .capacity = runtime };
 	} else {
 		memset(&current->cbs.server, 0, sizeof(struct sched_cbs_entity_server));
