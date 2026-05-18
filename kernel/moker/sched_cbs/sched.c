@@ -23,7 +23,7 @@ static inline struct task_struct *cbs_task_of(struct sched_cbs_entity *cbs_se)
 
 static inline int sched_cbs_entity_is_hard(struct sched_cbs_entity *p)
 {
-	return p->server.capacity != 0; /* TODO: Review this */
+	return p->server.capacity > 0; /* TODO: Review this */
 }
 
 static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
@@ -347,11 +347,13 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
         cbs_se->on_rq = 1;
         add_nr_running(rq, 1);
 
-	trace_printk("[id:%d] [Ci:%llu] [Ti:%llu] [Di:%llu]\n",
+	trace_printk("[id:%d] [hard:%d][Ci:%llu] [Ti:%llu] [Di:%llu] [Bi:%llu]\n",
 		     cbs_se->id,
+		     sched_cbs_entity_is_hard(cbs_se),
 		     (unsigned long long)cbs_se->runtime,
 		     (unsigned long long)cbs_se->period,
-		     (unsigned long long)cbs_se->deadline);
+		     (unsigned long long)cbs_se->deadline,
+		     (unsigned long long)cbs_se->server.remaining_budget);
 
 	raw_spin_unlock(&rq->cbs.lock);
 
