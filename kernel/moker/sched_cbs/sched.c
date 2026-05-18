@@ -38,7 +38,7 @@ static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
 		p->server.remaining_budget = 0;
 	}
 
-	trace_printk("[id:%d] [rem_budget:%d]\n", p->id, p->server.remaining_budget);
+	trace_printk("[id:%d] [rem_budget:%llu]\n", p->id, p->server.remaining_budget);
 
 	p->slice_start = now;
 }
