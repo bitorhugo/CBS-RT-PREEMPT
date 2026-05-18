@@ -114,13 +114,13 @@ int main(int argc, char **argv)
 {
 	unsigned long long C;
 	unsigned long long T;
+	unsigned long long D;
 	unsigned long long O;
 	unsigned long long time0;
 	unsigned long long release;
 	unsigned int task_id;
 	unsigned int is_hard;
 	unsigned int njobs;
-	int res;
 	struct timespec r;
 
 	task_id = atoi(argv[1]);
@@ -129,7 +129,7 @@ int main(int argc, char **argv)
 	       task_id, getpid(), is_hard);
 
 	C = (unsigned long long)atoll(argv[2]);
-	T = (unsigned long long)atoll(argv[3]);
+	T = D = (unsigned long long)atoll(argv[3]);
 	O = (unsigned long long)atoll(argv[4]) + OFFSET;
 	time0 = (unsigned long long)atoll(argv[5]);
 	njobs = atoi(argv[6]);
