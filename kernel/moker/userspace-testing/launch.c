@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
 	pid_t pid_tasks[NR_TASKS];
 	struct task tasks[NR_TASKS];
 	unsigned int ntasks;
-	char arg[6][30];
+	char arg[7][30];
 	struct timespec t;
 	unsigned long long time0;
 	int status;
