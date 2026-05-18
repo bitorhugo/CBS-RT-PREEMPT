@@ -38,6 +38,8 @@ static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
 		p->server.remaining_budget = 0;
 	}
 
+	trace_printk("[id:%d] [rem_budget:%d]\n", p->id, p->server.remaining_budget);
+
 	p->slice_start = now;
 }
 
@@ -62,7 +64,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 		 * We don't want to do anything about hard tasks except log something.
 		 * We assume schedulability analysis is a pre-condition.
 		 */
-		trace_printk("MOKER: [id:%d] Deadline not met\n", cbs_se->id);
+		trace_printk("[id:%d] Hard Deadline not met\n", cbs_se->id);
 
 		task_rq_unlock(rq, p, &rflags);
 
@@ -71,7 +73,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 
 	expiry = ktime_to_ns(hrtimer_get_expires(timer));
 	if(cbs_se->deadline <= expiry) {
-		trace_printk("MOKER: [id:%d] Deadline wasn't postponed\n", cbs_se->id);
+		trace_printk("[id:%d] Soft Deadline not updated\n", cbs_se->id);
 
 		task_rq_unlock(rq, p, &rflags);
 
@@ -79,7 +81,9 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 	}
 
 	hrtimer_set_expires(timer, ns_to_ktime(cbs_se->deadline));
-	trace_printk("MOKER: [id:%d] Deadline postponed [D=%llu]\n", cbs_se->id, cbs_se->deadline);
+	trace_printk("[id:%d] Deadline updated [D=%llu]\n",
+		     cbs_se->id,
+		     cbs_se->deadline);
 
 	task_rq_unlock(rq, p, &rflags);
 
@@ -192,6 +196,11 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 		}
 	}
 
+	trace_printk("[id:%d] Budget Replenished [Budget=%llu] [D=%llu]\n",
+		     cbs_se->id,
+		     cbs_se->server.remaining_budget,
+		     cbs_se->deadline);
+
 	raw_spin_unlock(&cbs_rq->lock);
 
 	task_rq_unlock(rq, p, &rflags);
@@ -224,7 +233,7 @@ static void sched_cbs_entity_hr_replenish_arm(struct sched_cbs_entity *p)
 	enum hrtimer_mode mode;
 
 	if(p->server.remaining_budget <= 0) {
-		trace_printk("MOKER: [id:%d] Replenish is <=0\n", p->id);
+		trace_printk("[id:%d] Replenish is <=0\n", p->id);
 		return;
 	}
 
@@ -310,6 +319,8 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	raw_spin_lock(&rq->cbs.lock);
 
+	trace_printk("MOKER:[id:%d]\n", cbs_se->id)
+
 	cbs_se = &p->cbs;
 	cbs_rq = &rq->cbs;
 
@@ -331,13 +342,12 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	// 4. arm deadline timer
 	sched_cbs_entity_hr_deadline_arm(cbs_se);
-	trace_printk("MOKER: [id:%d] Dead armed\n", cbs_se->id);
 
 	// 5. mark task as part of the rq
         cbs_se->on_rq = 1;
         add_nr_running(rq, 1);
 
-	trace_printk("MOKER: [id:%d] [Ci:%llu] [Ti:%llu] [Di:%llu]\n",
+	trace_printk("[id:%d] [Ci:%llu] [Ti:%llu] [Di:%llu]\n",
 		     cbs_se->id,
 		     (unsigned long long)cbs_se->runtime,
 		     (unsigned long long)cbs_se->period,
@@ -370,7 +380,7 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 
 	// 1. disarm hr_deadline
 	is_disarmed = sched_cbs_entity_hr_deadline_disarm(cbs_se);
-	trace_printk("MOKER: [id:%d] Dead disarmed [status:%d]\n",
+	trace_printk("[id:%d] Dead disarmed [status:%d]\n",
 		     cbs_se->id, is_disarmed);
 
 	// 2. erase task from rq
@@ -412,7 +422,7 @@ static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 		return;
 
         if (p->cbs.deadline < curr->cbs.deadline) {
-		trace_printk("MOKER: [id:%d] Preempted by [id:%d]\n",
+		trace_printk("[id:%d] Preempted by [id:%d]\n",
 			     curr->cbs.id, p->cbs.id);
                 resched_curr(rq);
 	}
@@ -435,7 +445,6 @@ static struct task_struct *pick_task_cbs(struct rq *rq, struct rq_flags *rf)
 	picked = cbs_task_of(container_of(leftmost,
 					  struct sched_cbs_entity,
 					  rb_node));
-	trace_printk("MOKER: [id:%d] Picked\n", picked->cbs.id);
 
 unlock:
 	raw_spin_unlock(&rq->cbs.lock);
@@ -469,7 +478,7 @@ static void put_prev_task_cbs(struct rq *rq, struct task_struct *p, struct task_
 
 	// 2. cancel the budget tracking timer
 	is_disarmed = sched_cbs_entity_hr_replenish_disarm(cbs_se);
-	trace_printk("MOKER: [id:%d] Replen disarmed [status:%d]\n",
+	trace_printk("[id:%d] Replen disarmed [status:%d]\n",
 		     cbs_se->id, is_disarmed);
 }
 
@@ -493,7 +502,7 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 	// 2. arm replenish to relative time from server.remaining_budget
 	if(!hrtimer_active(&cbs_se->server.hr_replenish)) {
 		sched_cbs_entity_hr_replenish_arm(cbs_se);
-		trace_printk("MOKER: [id:%d] Replen armed\n", cbs_se->id);
+		trace_printk("[id:%d] Replen armed\n", cbs_se->id);
 	}
 }
 
