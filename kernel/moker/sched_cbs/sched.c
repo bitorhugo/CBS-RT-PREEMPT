@@ -286,7 +286,8 @@ static void sched_cbs_entity_calc_deadline(struct sched_cbs_entity *p, u64 arriv
 	if(is_first) {
 		p->deadline = arrival + p->period;
 		p->server.remaining_budget = p->server.capacity;
-		p->first = 0;
+		p->server.first = 0;
+		return;
 	}
 
 	/*
