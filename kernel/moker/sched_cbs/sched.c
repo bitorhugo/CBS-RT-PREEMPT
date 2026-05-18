@@ -23,7 +23,7 @@ static inline struct task_struct *cbs_task_of(struct sched_cbs_entity *cbs_se)
 
 static inline int sched_cbs_entity_is_hard(struct sched_cbs_entity *p)
 {
-	return p->server.capacity = 0; /* TODO: Review this */
+	return p->server.capacity == 0; /* TODO: Review this */
 }
 
 static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
