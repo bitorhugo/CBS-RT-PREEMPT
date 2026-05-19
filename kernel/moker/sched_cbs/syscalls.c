@@ -37,7 +37,7 @@ int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadlin
 	current->cbs.deadline = deadline;
 
 	if(!is_hard) {
-		cap = (curr->runtime * 80) / 100;
+		cap = (current->runtime * 80) / 100;
 		current->cbs.server = (struct sched_cbs_entity_server){ .capacity = cap,
 			                                                .first = 1};
 	} else {
