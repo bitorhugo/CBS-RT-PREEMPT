@@ -29,13 +29,17 @@ SYSCALL_DEFINE5(moker_sched_cbs_entity_setup,
 
 int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadline, int is_hard)
 {
+	u64 cap;
+
 	current->cbs.id       = id;
 	current->cbs.runtime  = runtime;
 	current->cbs.period   = period;
 	current->cbs.deadline = deadline;
 
 	if(!is_hard) {
-		current->cbs.server = (struct sched_cbs_entity_server){ .capacity = runtime, .first = 1 };
+		cap = (curr->runtime * 80) / 100;
+		current->cbs.server = (struct sched_cbs_entity_server){ .capacity = cap,
+			                                                .first = 1};
 	} else {
 		current->cbs.server = (struct sched_cbs_entity_server){ 0 };
 	}
