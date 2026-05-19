@@ -160,6 +160,10 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	// 1. replenish server's remaining budget
 	cbs_se->server.remaining_budget = cbs_se->server.capacity;
 
+#ifdef CONFIG_MOKER_TRACING
+        moker_trace(BUDGET_REPLEN_SOFT, p, cbs_se->id);
+#endif
+
 	/*
 	 * 2. postpone deadline
 	 * This will effectively re-arm the deadline timer as well,
@@ -169,10 +173,6 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 
 	// 3. update slice_start
 	cbs_se->slice_start = now;
-
-#ifdef CONFIG_MOKER_TRACING
-        moker_trace(BUDGET_REPLEN_SOFT, p, cbs_se->id);
-#endif
 
 	if (cbs_se->on_rq) {
 		// 4. requeue task
@@ -310,7 +310,7 @@ static void sched_cbs_entity_calc_deadline(struct sched_cbs_entity *p, u64 arriv
 	}
 
 	/* 2. if (cs * Ts >= (di - ri) * Qs), then generate new deadline */
-	lhs = p->runtime * p->period;
+	lhs = p->server.remaining_budget * p->period;
 	rhs = (u64)diff * p->server.capacity;
 	if (lhs >= rhs) {
 		p->deadline = arrival + p->period;
