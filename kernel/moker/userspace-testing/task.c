@@ -6,7 +6,7 @@ void do_work(unsigned long long exec)
 {
 	unsigned long long ten_ns;
 
-	ten_ns = exec / 10;
+	ten_ns = (exec * 2) / 17;
 
 	for(size_t i = 0; i < ten_ns; i++) {
 		asm volatile  ("nop" ::);
