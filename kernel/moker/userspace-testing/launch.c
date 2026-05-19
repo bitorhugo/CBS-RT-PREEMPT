@@ -170,8 +170,12 @@ int main(int argc, char *argv[])
 
 	printf("LAUNCH: Forking tasks\n");
 	for(i = 0; i < ntasks; i++) {
-		char task_name[16];
-		sprintf(task_name, "task-%d", tasks[i].id);
+		char task_name[32];
+		if (tasks[i].is_hard) {
+			sprintf(task_name, "hard-task-%d", tasks[i].id);
+		} else {
+			sprintf(task_name, "soft-task-%d", tasks[i].id);
+		}
 		sprintf(arg[0],"%d", tasks[i].id);
 		sprintf(arg[1],"%d", tasks[i].is_hard);
 		sprintf(arg[2],"%llu", tasks[i].C);
