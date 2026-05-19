@@ -439,7 +439,7 @@ static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 	}
 
 #ifdef CONFIG_MOKER_TRACING
-        moker_trace(PREEMPT_RQ, p, cbs_se->id);
+        moker_trace(PREEMPT_RQ, p, curr->cbs.id);
 #endif
 }
 
