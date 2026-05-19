@@ -170,17 +170,19 @@ int main(int argc, char *argv[])
 
 	printf("LAUNCH: Forking tasks\n");
 	for(i = 0; i < ntasks; i++) {
-		sprintf(arg[0],"%d",tasks[i].id);
-		sprintf(arg[1],"%d",tasks[i].is_hard);
-		sprintf(arg[2],"%llu",tasks[i].C);
-		sprintf(arg[3],"%llu",tasks[i].T);
-		sprintf(arg[4],"%llu",tasks[i].O);
-		sprintf(arg[5],"%llu",time0);
-		sprintf(arg[6],"%d",tasks[i].njobs);
+		char task_name[16];
+		sprintf(task_name, "task-%d", tasks[i].id);
+		sprintf(arg[0],"%d", tasks[i].id);
+		sprintf(arg[1],"%d", tasks[i].is_hard);
+		sprintf(arg[2],"%llu", tasks[i].C);
+		sprintf(arg[3],"%llu", tasks[i].T);
+		sprintf(arg[4],"%llu", tasks[i].O);
+		sprintf(arg[5],"%llu", time0);
+		sprintf(arg[6],"%d", tasks[i].njobs);
 
 		pid_tasks[i] = fork();
 		if(pid_tasks[i] == 0) {
-			execl("./task", "task", arg[0], arg[1], arg[2], arg[3],
+			execl("./task", task_name, arg[0], arg[1], arg[2], arg[3],
 			      arg[4], arg[5], arg[6], NULL);
 			printf("Error: execv: task\n");
 			exit(0);
