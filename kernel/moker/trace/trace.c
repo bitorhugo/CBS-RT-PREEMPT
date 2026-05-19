@@ -41,7 +41,7 @@ static int dequeue (char *buffer)
 	int remaining = TRACE_STRING_BUFFER_SIZE;
 	int ret = 0;
 	int len = 0;
-	char evt[10];
+	char evt[32];
 
 	spin_lock_irqsave(&trace.lock, flags);
 
@@ -50,22 +50,37 @@ static int dequeue (char *buffer)
 
 	switch((int)trace.events[trace.read_item].event) {
 	case MISC_EVT:
-		strcpy(evt,"MC_EVT");
+		strcpy(evt, "MC_EVT");
 		break;
 	case SCHED_TICK:
-		strcpy(evt,"SCH_TK");
+		strcpy(evt, "SCH_TK");
 		break;
 	case SWITCH_AWAY:
-		strcpy(evt,"SWT_AY");
+		strcpy(evt, "SWT_AY");
 		break;
 	case SWITCH_TO:
-		strcpy(evt,"SWT_TO");
+		strcpy(evt, "SWT_TO");
 		break;
 	case ENQUEUE_RQ:
-		strcpy(evt,"ENQ_RQ");
+		strcpy(evt, "ENQ_RQ");
 		break;
 	case DEQUEUE_RQ:
-		strcpy(evt,"DEQ_RQ");
+		strcpy(evt, "DEQ_RQ");
+		break;
+	case REQUEUE_RQ:
+		strcpy(evt, "REQUEUE_RQ");
+		break;
+	case PREEMPT_RQ:
+		strcpy(evt, "PREEMPT_RQ");
+		break;
+	case ARM_REPLEN_SOFT:
+		strcpy(evt, "ARM_REPLEN_SOFT");
+		break;
+	case BUDGET_REPLEN_SOFT:
+		strcpy(evt, "BUDGET_REPLEN_SOFT");
+		break;
+	case DISARM_REPLEN_SOFT:
+		strcpy(evt, "DISARM_REPLEN_SOFT");
 		break;
 	default:
 		strcpy(evt,"UK_EVT");

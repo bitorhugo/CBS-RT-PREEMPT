@@ -13,7 +13,12 @@ enum evt {
 	SWITCH_AWAY,
 	SWITCH_TO,
 	ENQUEUE_RQ,
-	DEQUEUE_RQ
+	DEQUEUE_RQ,
+	REQUEUE_RQ,
+	PREEMPT_RQ,
+	ARM_REPLEN_SOFT,
+	BUDGET_REPLEN_SOFT,
+	DISARM_REPLEN_SOFT
 };
 
 struct trace_evt {
@@ -35,8 +40,7 @@ struct trace_evt_buffer {
 	spinlock_t lock;
 };
 
-ssize_t trace_read(struct file *filp, char __user *buf, size_t count,
-		   loff_t *f_pos);
+ssize_t trace_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
 void moker_trace(enum evt event, struct task_struct *p, int number);
 void set_tracing(unsigned int t);
 

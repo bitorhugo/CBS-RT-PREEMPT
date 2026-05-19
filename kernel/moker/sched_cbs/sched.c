@@ -170,11 +170,19 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	// 3. update slice_start
 	cbs_se->slice_start = now;
 
+#ifdef CONFIG_MOKER_TRACING
+        moker_trace(BUDGET_REPLEN_SOFT, p, cbs_se->id);
+#endif
+
 	if (cbs_se->on_rq) {
 		// 4. requeue task
 		rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
 		RB_CLEAR_NODE(&cbs_se->rb_node);
 		rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
+
+#ifdef CONFIG_MOKER_TRACING
+		moker_trace(REQUEUE_RQ, p, cbs_se->id);
+#endif
 
 		// 4. resched_curr if needed
 		if(!task_has_cbs_policy(rq->curr)) {
@@ -429,6 +437,10 @@ static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 			     curr->cbs.id, p->cbs.id);
                 resched_curr(rq);
 	}
+
+#ifdef CONFIG_MOKER_TRACING
+        moker_trace(PREEMPT_RQ, p, cbs_se->id);
+#endif
 }
 
 
@@ -459,8 +471,9 @@ unlock:
 /*
  * @p: task currently on CPU
  * @next: task to run next on CPU
-*/
-static void put_prev_task_cbs(struct rq *rq, struct task_struct *p, struct task_struct *next)
+ */
+static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
+			      struct task_struct *next)
 {
 	struct sched_cbs_entity *cbs_se;
 	u64 now;
@@ -483,6 +496,10 @@ static void put_prev_task_cbs(struct rq *rq, struct task_struct *p, struct task_
 	is_disarmed = sched_cbs_entity_hr_replenish_disarm(cbs_se);
 	trace_printk("[id:%d] Replen disarmed [status:%d]\n",
 		     cbs_se->id, is_disarmed);
+
+#ifdef CONFIG_MOKER_TRACING
+        moker_trace(DISARM_REPLEN_SOFT, p, cbs_se->id);
+#endif
 }
 
 
@@ -507,6 +524,10 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 		sched_cbs_entity_hr_replenish_arm(cbs_se);
 		trace_printk("[id:%d] Replen armed\n", cbs_se->id);
 	}
+
+#ifdef CONFIG_MOKER_TRACING
+        moker_trace(ARM_REPLEN_SOFT, p, cbs_se->id);
+#endif
 }
 
 
