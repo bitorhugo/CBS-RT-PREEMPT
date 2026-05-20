@@ -141,7 +141,12 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	struct cbs_rq *cbs_rq;
 	struct task_struct *p;
 	struct sched_cbs_entity *cbs_se;
+	struct sched_cbs_entity *leftmost_se;
+	struct rb_node *leftmost;
+	enum hrtimer_restart ret;
 	u64 now;
+
+	ret = HRTIMER_NORESTART;
 
 	cbs_se = container_of(container_of(timer,
 					   struct sched_cbs_entity_server,
@@ -149,7 +154,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 			      struct sched_cbs_entity,
 			      server);
 	p = cbs_task_of(cbs_se);
-	rq = task_rq_lock(p, &rflags); /* Returns the rq this task belongs to */
+	rq = task_rq_lock(p, &rflags); /* Grabs the rq and locks it  */
 	cbs_rq = &rq->cbs;
 
 	update_rq_clock(rq); /* Requires rq_lock */
@@ -175,34 +180,43 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 	// 3. update slice_start
 	cbs_se->slice_start = now;
 
-	if (cbs_se->on_rq) {
-		// 4. requeue task
-		rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
-		RB_CLEAR_NODE(&cbs_se->rb_node);
-		rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
+	if (!cbs_se->on_rq)
+		goto unlock;
+
+	// 4. requeue task
+	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
+	RB_CLEAR_NODE(&cbs_se->rb_node);
+	rb_add_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree, cbs_rq_less);
 
 #ifdef CONFIG_MOKER_TRACING
-		moker_trace(REQUEUE_RQ, p, cbs_se->id);
+	moker_trace(REQUEUE_RQ, p, cbs_se->id);
 #endif
 
-		// 4. resched_curr if needed
-		if(!task_has_cbs_policy(rq->curr)) {
-			resched_curr(rq);
-		} else {
-			struct rb_node *leftmost;
-			/* if task on CPU isn't the leftmost on rq, resched it */
-			leftmost = rb_first_cached(&cbs_rq->tasks_tree);
-			if(leftmost) {
-				struct sched_cbs_entity *leftmost_se;
-				leftmost_se = container_of(leftmost,
-							   struct sched_cbs_entity,
-							   rb_node);
-				if(cbs_task_of(leftmost_se) != rq->curr)
-					resched_curr(rq);
-			}
-		}
+	// 4. resched_curr if needed
+	if(!task_has_cbs_policy(rq->curr)) {
+		resched_curr(rq);
+		goto unlock;
 	}
 
+
+	leftmost = rb_first_cached(&cbs_rq->tasks_tree);
+	if(!leftmost)
+		goto unlock;
+
+	leftmost_se = container_of(leftmost, struct sched_cbs_entity, rb_node);
+	if(cbs_task_of(leftmost_se) != rq->curr) {
+		resched_curr(rq);
+		goto unlock;
+	}
+
+	if(p == rq->curr) {
+		/* hrtimer_set_expires expects an absolute expiry value */
+		hrtimer_set_expires(timer,
+				    ns_to_ktime(now + cbs_se->server.remaining_budget));
+		ret = HRTIMER_RESTART;
+	}
+
+unlock:
 	trace_printk("[id:%d] Budget Replenished [Budget=%llu] [D=%llu]\n",
 		     cbs_se->id,
 		     (unsigned long long)cbs_se->server.remaining_budget,
@@ -212,7 +226,7 @@ static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtime
 
 	task_rq_unlock(rq, p, &rflags);
 
-	return HRTIMER_NORESTART;
+	return ret;
 }
 
 
