@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 
+#include <linux/math64.h>
 #include "cbs_rq.h"
 #include "cbs_task.h"
 #include "../../sched/sched.h"
@@ -309,9 +310,17 @@ static void sched_cbs_entity_calc_deadline(struct sched_cbs_entity *p, u64 arriv
 		return;
 	}
 
-	/* 2. if (cs * Ts >= (di - ri) * Qs), then generate new deadline */
-	lhs = p->server.remaining_budget * p->period;
-	rhs = (u64)diff * p->server.capacity;
+	/*
+	 * Caution: cs, Ts, di, ri, and Qs are all 64 bit values
+	 *          with nanosecond precision.
+	 *          Operating over these may overflow.
+	 *          'mul_u64_u64_div_u64' (see include/linux/math64.h)
+	 *          is a helper macro that does full 64 bit math safely.
+	 */
+
+	/* 2. if (cs >= (di - ri) * Qs/Ts), then generate new deadline */
+	lhs = p->server.remaining_budget;
+	rhs = mul_u64_u64_div_u64((u64)diff, p->server.capacity, p->period);
 	if (lhs >= rhs) {
 		p->deadline = arrival + p->period;
 		p->server.remaining_budget = p->server.capacity;
