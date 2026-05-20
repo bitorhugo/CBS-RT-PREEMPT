@@ -519,8 +519,7 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 	now = ktime_get_ns();
 
 	// 1. time the task's execution start
-	if(first)
-		cbs_se->slice_start = now;
+	cbs_se->slice_start = now;
 
 	if(sched_cbs_entity_is_hard(cbs_se))
 		return;
@@ -528,12 +527,10 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 	// 2. arm replenish to relative time from server.remaining_budget
 	if(!hrtimer_active(&cbs_se->server.hr_replenish)) {
 		sched_cbs_entity_hr_replenish_arm(cbs_se);
-		trace_printk("[id:%d] Replen armed\n", cbs_se->id);
-	}
-
 #ifdef CONFIG_MOKER_TRACING
-        moker_trace(ARM_REPLEN_SOFT, p, cbs_se->id);
+		moker_trace(ARM_REPLEN_SOFT, p, cbs_se->id);
 #endif
+	}
 }
 
 
