@@ -1,6 +1,7 @@
 #include <linux/syscalls.h>
 #include <linux/sched.h>
 #include <linux/string.h>
+#include <linux/math64.h>
 #include "../../sched/sched.h"
 #include "syscalls.h"
 #include "cbs_task.h"
@@ -27,7 +28,8 @@ SYSCALL_DEFINE5(moker_sched_cbs_entity_setup,
 	return do_moker_sched_cbs_entity_setup(id, runtime, period, deadline, is_hard);
 }
 
-int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadline, int is_hard)
+int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period,
+				    u64 deadline, int is_hard)
 {
 	u64 cap;
 
@@ -37,9 +39,9 @@ int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period, u64 deadlin
 	current->cbs.deadline = deadline;
 
 	if(!is_hard) {
-		cap = (current->cbs.runtime * 80) / 100;
+		cap = mul_u64_u64_div_u64(current->cbs.runtime, 80, 100);
 		current->cbs.server = (struct sched_cbs_entity_server){ .capacity = cap,
-			                                                .first = 1};
+			.first = 1};
 	} else {
 		current->cbs.server = (struct sched_cbs_entity_server){ 0 };
 	}

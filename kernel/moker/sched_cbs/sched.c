@@ -267,7 +267,7 @@ static int sched_cbs_entity_hr_replenish_disarm(struct sched_cbs_entity *p)
 
 static void sched_cbs_entity_hr_timers_setup(struct sched_cbs_entity *p)
 {
-	sched_cbs_entity_hr_deadline_setup(p);
+	//sched_cbs_entity_hr_deadline_setup(p);
 
 	if(sched_cbs_entity_is_hard(p))
 		return;
@@ -359,7 +359,7 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	sched_cbs_entity_hr_timers_setup(cbs_se);
 
 	// 4. arm deadline timer
-	sched_cbs_entity_hr_deadline_arm(cbs_se);
+	// sched_cbs_entity_hr_deadline_arm(cbs_se);
 
 	// 5. mark task as part of the rq
         cbs_se->on_rq = 1;
@@ -442,14 +442,11 @@ static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 		return;
 
         if (p->cbs.deadline < curr->cbs.deadline) {
-		trace_printk("[id:%d] Preempted by [id:%d]\n",
-			     curr->cbs.id, p->cbs.id);
+#ifdef CONFIG_MOKER_TRACING
+		moker_trace(PREEMPT_RQ, p, curr->cbs.id);
+#endif
                 resched_curr(rq);
 	}
-
-#ifdef CONFIG_MOKER_TRACING
-        moker_trace(PREEMPT_RQ, p, curr->cbs.id);
-#endif
 }
 
 
