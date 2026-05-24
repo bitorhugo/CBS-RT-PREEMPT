@@ -52,7 +52,7 @@ SYSCALL_DEFINE5(moker_sched_cbs_entity_setup,
  * Return: result of `sched_setscheduler` call.
  */
 int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period,
-									u64 deadline, int is_hard)
+				    u64 deadline, int is_hard)
 {
 	u64 cap;
 

@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __CBS_TASK_H_
 #define __CBS_TASK_H_
 

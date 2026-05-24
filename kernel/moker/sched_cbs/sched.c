@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
-
 #include <linux/math64.h>
 #include "cbs_rq.h"
 #include "cbs_task.h"
@@ -477,10 +475,6 @@ unlock:
 	return picked;
 }
 
-/*
- * @p: task currently on CPU
- * @next: task to run next on CPU
- */
 /**
  * put_prev_task_cbs - bookkeeping when a CBS task is replaced on CPU
  * @rq: runqueue pointer
@@ -491,7 +485,7 @@ unlock:
  * for soft servers.
  */
 static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
-				  struct task_struct *next)
+			      struct task_struct *next)
 {
 	struct sched_cbs_entity *cbs_se;
 	u64 now;
