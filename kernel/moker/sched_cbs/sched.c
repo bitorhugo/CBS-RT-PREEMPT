@@ -69,121 +69,6 @@ static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
 }
 
 /**
- * sched_cbs_entity_hr_deadline_callback - hrtimer callback for deadlines
- * @timer: pointer to the entity's hr_deadline timer
- *
- * Called when a task's deadline timer expires. If the entity is hard
- * real-time a warning is emitted; for soft servers the timer expiry
- * may be adjusted and re-armed. Returns the appropriate hrtimer action.
- *
- * Return: HRTIMER_RESTART to re-arm, HRTIMER_NORESTART otherwise.
- */
-static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer *timer)
-{
-	struct rq *rq;
-	struct rq_flags rflags;
-	struct task_struct *p;
-	struct sched_cbs_entity *cbs_se;
-	u64 expiry;
-
-	cbs_se = container_of(timer, struct sched_cbs_entity, hr_deadline);
-	p = cbs_task_of(cbs_se);
-
-	rq = task_rq_lock(p, &rflags); /* Grab the rq this task belongs to */
-
-	update_rq_clock(rq); /* Requires rq_lock */
-
-	if(sched_cbs_entity_is_hard(cbs_se)) {
-		/*
-		 * We don't want to do anything about hard tasks except log something.
-		 * We assume schedulability analysis is a pre-condition.
-		 */
-		trace_printk("[id:%d] Hard Deadline not met\n", cbs_se->id);
-
-		task_rq_unlock(rq, p, &rflags);
-
-		return HRTIMER_NORESTART;
-	}
-
-	expiry = ktime_to_ns(hrtimer_get_expires(timer));
-	if(cbs_se->deadline <= expiry) {
-		trace_printk("[id:%d] Soft Deadline not updated\n", cbs_se->id);
-
-		task_rq_unlock(rq, p, &rflags);
-
-		return HRTIMER_NORESTART;
-	}
-
-	hrtimer_set_expires(timer, ns_to_ktime(cbs_se->deadline));
-	trace_printk("[id:%d] Deadline updated [D=%llu]\n",
-		     cbs_se->id,
-		     (unsigned long long)cbs_se->deadline);
-
-	task_rq_unlock(rq, p, &rflags);
-
-	return HRTIMER_RESTART;
-}
-
-/**
- * sched_cbs_entity_hr_deadline_setup - initialize the deadline hrtimer
- * @p: CBS scheduling entity
- *
- * Sets up the absolute deadline timer used to track the task's deadline.
- */
-static void sched_cbs_entity_hr_deadline_setup(struct sched_cbs_entity *p)
-{
-	struct hrtimer *timer;
-	clockid_t clock_id;
-	enum hrtimer_mode mode;
-
-	timer = &p->hr_deadline;
-	clock_id = CLOCK_MONOTONIC;
-	mode = HRTIMER_MODE_ABS_HARD;
-
-	hrtimer_setup(timer,
-		      sched_cbs_entity_hr_deadline_callback,
-		      clock_id,
-		      mode);
-}
-
-/**
- * sched_cbs_entity_hr_deadline_arm - arm the deadline hrtimer
- * @p: CBS scheduling entity
- *
- * Start the deadline timer using the entity's current absolute deadline.
- */
-static void sched_cbs_entity_hr_deadline_arm(struct sched_cbs_entity *p)
-{
-	struct hrtimer *timer;
-	ktime_t deadline;
-	enum hrtimer_mode mode;
-
-	timer = &p->hr_deadline;
-	deadline = ns_to_ktime(p->deadline);
-	mode = HRTIMER_MODE_ABS_HARD;
-
-	hrtimer_start(timer, deadline, mode);
-}
-
-/**
- * sched_cbs_entity_hr_deadline_disarm - try to cancel the deadline timer
- * @p: CBS scheduling entity
- *
- * Return: non-zero if the timer was cancelled, zero otherwise.
- */
-static int sched_cbs_entity_hr_deadline_disarm(struct sched_cbs_entity *p)
-{
-	struct hrtimer *timer;
-	int ret;
-
-	timer = &p->hr_deadline;
-
-	ret = hrtimer_try_to_cancel(timer);
-
-	return ret;
-}
-
-/**
  * sched_cbs_entity_hr_replenish_callback - replenish timer callback
  * @timer: pointer to the entity's replenish timer
  *
@@ -358,8 +243,6 @@ static int sched_cbs_entity_hr_replenish_disarm(struct sched_cbs_entity *p)
  */
 static void sched_cbs_entity_hr_timers_setup(struct sched_cbs_entity *p)
 {
-	sched_cbs_entity_hr_deadline_setup(p);
-
 	if(sched_cbs_entity_is_hard(p))
 		return;
 
@@ -464,10 +347,7 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 	// 3. setup deadline & replenish timers
 	sched_cbs_entity_hr_timers_setup(cbs_se);
 
-	// 4. arm deadline timer
-	sched_cbs_entity_hr_deadline_arm(cbs_se);
-
-	// 5. mark task as part of the rq
+	// 4. mark task as part of the rq
         cbs_se->on_rq = 1;
         add_nr_running(rq, 1);
 
@@ -514,18 +394,13 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 		return false;
 	}
 
-	// 1. disarm hr_deadline
-	is_disarmed = sched_cbs_entity_hr_deadline_disarm(cbs_se);
-	trace_printk("[id:%d] Dead disarmed [status:%d]\n",
-		     cbs_se->id, is_disarmed);
-
-	// 2. erase task from rq
+	// 1. erase task from rq
 	rb_erase_cached(&cbs_se->rb_node, &cbs_rq->tasks_tree);
 	RB_CLEAR_NODE(&cbs_se->rb_node);
 
 	now = ktime_get_ns();
 
-	// 3. update remaining_budget
+	// 2. update remaining_budget
 	if(p == rq->curr)
 		sched_cbs_entity_update(cbs_se, now);
 
