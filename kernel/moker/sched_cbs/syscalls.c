@@ -10,6 +10,17 @@
 #include "../trace/trace.h"
 #endif
 
+/**
+ * moker_sched_cbs_entity_setup - syscall to setup a CBS entity for current task
+ * @id: identifier for the CBS entity
+ * @runtime: execution budget (Ci) in nanoseconds
+ * @period: server period (Ti) in nanoseconds
+ * @deadline: initial absolute deadline (Di) in nanoseconds
+ * @is_hard: non-zero if entity is hard real-time (no budget tracking)
+ *
+ * Logs the request and forwards parameters to do_moker_sched_cbs_entity_setup.
+ * Return: syscall return value from do_moker_sched_cbs_entity_setup.
+ */
 SYSCALL_DEFINE5(moker_sched_cbs_entity_setup,
 		int, id,
 		u64, runtime,
@@ -28,8 +39,20 @@ SYSCALL_DEFINE5(moker_sched_cbs_entity_setup,
 	return do_moker_sched_cbs_entity_setup(id, runtime, period, deadline, is_hard);
 }
 
+/**
+ * do_moker_sched_cbs_entity_setup - configure current task CBS parameters
+ * @id: entity identifier
+ * @runtime: execution budget (Ci)
+ * @period: server period (Ti)
+ * @deadline: initial deadline (Di)
+ * @is_hard: non-zero if hard real-time server
+ *
+ * Initialize the current task's `cbs` fields, compute soft-server capacity,
+ * and switch the task's scheduler to SCHED_CBS.
+ * Return: result of `sched_setscheduler` call.
+ */
 int do_moker_sched_cbs_entity_setup(int id, u64 runtime, u64 period,
-				    u64 deadline, int is_hard)
+									u64 deadline, int is_hard)
 {
 	u64 cap;
 

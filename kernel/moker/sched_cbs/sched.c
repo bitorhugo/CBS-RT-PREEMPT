@@ -12,21 +12,47 @@
 static void update_curr_cbs(struct rq *rq);
 
 
+/**
+ * task_has_cbs_policy - check if task has SCHED_CBS policy
+ * @p: task pointer
+ *
+ * Return: non-zero if @p is scheduled under SCHED_CBS.
+ */
 static inline int task_has_cbs_policy(struct task_struct *p)
 {
 	return p->policy == SCHED_CBS;
 }
 
+/**
+ * cbs_task_of - obtain the task_struct containing a CBS entity
+ * @cbs_se: pointer to the CBS scheduling entity
+ *
+ * Return: pointer to the containing `task_struct`.
+ */
 static inline struct task_struct *cbs_task_of(struct sched_cbs_entity *cbs_se)
 {
 	return container_of(cbs_se, struct task_struct, cbs);
 }
 
+/**
+ * sched_cbs_entity_is_hard - check whether an entity is hard real-time
+ * @p: CBS scheduling entity
+ *
+ * Return: non-zero if the entity is configured as hard (no budget).
+ */
 static inline int sched_cbs_entity_is_hard(struct sched_cbs_entity *p)
 {
 	return p->server.capacity == 0; /* TODO: Review this */
 }
 
+/**
+ * sched_cbs_entity_update - update entity budget and slice start
+ * @p: CBS scheduling entity
+ * @now: current time in nanoseconds
+ *
+ * Decrease the entity's remaining budget by the elapsed time since
+ * @p->slice_start (saturating at 0) and set @p->slice_start to @now.
+ */
 static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
 {
 	u64 delta;
@@ -42,7 +68,16 @@ static inline void sched_cbs_entity_update(struct sched_cbs_entity *p, u64 now)
 	p->slice_start = now;
 }
 
-
+/**
+ * sched_cbs_entity_hr_deadline_callback - hrtimer callback for deadlines
+ * @timer: pointer to the entity's hr_deadline timer
+ *
+ * Called when a task's deadline timer expires. If the entity is hard
+ * real-time a warning is emitted; for soft servers the timer expiry
+ * may be adjusted and re-armed. Returns the appropriate hrtimer action.
+ *
+ * Return: HRTIMER_RESTART to re-arm, HRTIMER_NORESTART otherwise.
+ */
 static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer *timer)
 {
 	struct rq *rq;
@@ -89,7 +124,12 @@ static enum hrtimer_restart sched_cbs_entity_hr_deadline_callback(struct hrtimer
 	return HRTIMER_RESTART;
 }
 
-
+/**
+ * sched_cbs_entity_hr_deadline_setup - initialize the deadline hrtimer
+ * @p: CBS scheduling entity
+ *
+ * Sets up the absolute deadline timer used to track the task's deadline.
+ */
 static void sched_cbs_entity_hr_deadline_setup(struct sched_cbs_entity *p)
 {
 	struct hrtimer *timer;
@@ -106,7 +146,12 @@ static void sched_cbs_entity_hr_deadline_setup(struct sched_cbs_entity *p)
 		      mode);
 }
 
-
+/**
+ * sched_cbs_entity_hr_deadline_arm - arm the deadline hrtimer
+ * @p: CBS scheduling entity
+ *
+ * Start the deadline timer using the entity's current absolute deadline.
+ */
 static void sched_cbs_entity_hr_deadline_arm(struct sched_cbs_entity *p)
 {
 	struct hrtimer *timer;
@@ -120,7 +165,12 @@ static void sched_cbs_entity_hr_deadline_arm(struct sched_cbs_entity *p)
 	hrtimer_start(timer, deadline, mode);
 }
 
-
+/**
+ * sched_cbs_entity_hr_deadline_disarm - try to cancel the deadline timer
+ * @p: CBS scheduling entity
+ *
+ * Return: non-zero if the timer was cancelled, zero otherwise.
+ */
 static int sched_cbs_entity_hr_deadline_disarm(struct sched_cbs_entity *p)
 {
 	struct hrtimer *timer;
@@ -133,7 +183,14 @@ static int sched_cbs_entity_hr_deadline_disarm(struct sched_cbs_entity *p)
 	return ret;
 }
 
-
+/**
+ * sched_cbs_entity_hr_replenish_callback - replenish timer callback
+ * @timer: pointer to the entity's replenish timer
+ *
+ * Replenishes the server budget, postpones the deadline as needed,
+ * requeues the task and potentially requests a reschedule. Returns
+ * HRTIMER_RESTART when the caller re-arms the replenish timer.
+ */
 static enum hrtimer_restart sched_cbs_entity_hr_replenish_callback(struct hrtimer *timer)
 {
 	struct rq *rq;
@@ -229,7 +286,12 @@ unlock:
 	return ret;
 }
 
-
+/**
+ * sched_cbs_entity_hr_replenish_setup - initialize the replenish hrtimer
+ * @p: CBS scheduling entity
+ *
+ * Prepares the relative replenish timer used to track budget consumption.
+ */
 static void sched_cbs_entity_hr_replenish_setup(struct sched_cbs_entity *p)
 {
 	struct hrtimer *timer;
@@ -246,7 +308,12 @@ static void sched_cbs_entity_hr_replenish_setup(struct sched_cbs_entity *p)
 		      mode);
 }
 
-
+/**
+ * sched_cbs_entity_hr_replenish_arm - arm the replenish timer
+ * @p: CBS scheduling entity
+ *
+ * Starts the replenish timer relative to the entity's remaining budget.
+ */
 static void sched_cbs_entity_hr_replenish_arm(struct sched_cbs_entity *p)
 {
 	struct hrtimer *timer;
@@ -265,7 +332,12 @@ static void sched_cbs_entity_hr_replenish_arm(struct sched_cbs_entity *p)
 	hrtimer_start(timer, fire_at, mode);
 }
 
-
+/**
+ * sched_cbs_entity_hr_replenish_disarm - cancel the replenish timer
+ * @p: CBS scheduling entity
+ *
+ * Return: non-zero if the timer was cancelled, zero otherwise.
+ */
 static int sched_cbs_entity_hr_replenish_disarm(struct sched_cbs_entity *p)
 {
 	struct hrtimer *timer;
@@ -278,7 +350,12 @@ static int sched_cbs_entity_hr_replenish_disarm(struct sched_cbs_entity *p)
 	return ret;
 }
 
-
+/**
+ * sched_cbs_entity_hr_timers_setup - setup all hr timers for an entity
+ * @p: CBS scheduling entity
+ *
+ * Configures deadline and (for soft servers) replenish timers.
+ */
 static void sched_cbs_entity_hr_timers_setup(struct sched_cbs_entity *p)
 {
 	sched_cbs_entity_hr_deadline_setup(p);
@@ -289,7 +366,14 @@ static void sched_cbs_entity_hr_timers_setup(struct sched_cbs_entity *p)
 	sched_cbs_entity_hr_replenish_setup(p);
 }
 
-
+/**
+ * sched_cbs_entity_calc_deadline - compute or postpone entity deadline
+ * @p: CBS scheduling entity
+ * @arrival: arrival time in ns
+ *
+ * Calculate the entity's deadline based on arrival time, server state
+ * and CBS rules. May reset remaining budget when producing a new deadline.
+ */
 static void sched_cbs_entity_calc_deadline(struct sched_cbs_entity *p, u64 arrival)
 {
 	int is_first;
@@ -341,7 +425,15 @@ static void sched_cbs_entity_calc_deadline(struct sched_cbs_entity *p, u64 arriv
 	}
 }
 
-
+/**
+ * enqueue_task_cbs - enqueue a task into the CBS runqueue
+ * @rq: runqueue pointer
+ * @p: task to enqueue
+ * @flags: enqueue flags (unused)
+ *
+ * Calculates the task deadline, inserts it into the CBS red-black tree,
+ * sets up the hrtimers and marks the task as runnable on the CBS rq.
+ */
 static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 {
         struct sched_cbs_entity *cbs_se;
@@ -394,7 +486,17 @@ static void enqueue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 #endif
 }
 
-
+/**
+ * dequeue_task_cbs - remove a task from the CBS runqueue
+ * @rq: runqueue pointer
+ * @p: task to dequeue
+ * @flags: dequeue flags (unused)
+ *
+ * Disarms the deadline timer, removes the task from the tree, updates
+ * remaining budget if it was on CPU, and marks the task as not on rq.
+ *
+ * Return: true if the task was on the runqueue, false otherwise.
+ */
 static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 {
         struct sched_cbs_entity *cbs_se;
@@ -439,8 +541,15 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
         return true;
 }
 
-
-/* @p: task that wants CPU */
+/**
+ * wakeup_preempt_cbs - decide whether a waking CBS task should preempt
+ * @rq: runqueue pointer
+ * @p: waking task
+ * @flags: wakeup flags (unused)
+ *
+ * If the current task is CBS and the waking task has an earlier deadline
+ * request a reschedule to allow preemption.
+ */
 static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 {
         struct task_struct *curr;
@@ -463,7 +572,14 @@ static void wakeup_preempt_cbs(struct rq *rq, struct task_struct *p, int flags)
 	}
 }
 
-
+/**
+ * pick_task_cbs - pick the next CBS task to run
+ * @rq: runqueue pointer
+ * @rf: rq flags (unused)
+ *
+ * Returns the task_struct for the leftmost (earliest-deadline) entity
+ * in the CBS runqueue, or NULL if none.
+ */
 static struct task_struct *pick_task_cbs(struct rq *rq, struct rq_flags *rf)
 {
 	struct task_struct *picked;
@@ -487,13 +603,21 @@ unlock:
 	return picked;
 }
 
-
 /*
  * @p: task currently on CPU
  * @next: task to run next on CPU
  */
+/**
+ * put_prev_task_cbs - bookkeeping when a CBS task is replaced on CPU
+ * @rq: runqueue pointer
+ * @p: task being removed from CPU
+ * @next: task that will run next (unused)
+ *
+ * Updates the entity's remaining budget, and disarms the replenish timer
+ * for soft servers.
+ */
 static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
-			      struct task_struct *next)
+				  struct task_struct *next)
 {
 	struct sched_cbs_entity *cbs_se;
 	u64 now;
@@ -522,8 +646,15 @@ static void put_prev_task_cbs(struct rq *rq, struct task_struct *p,
 #endif
 }
 
-
-/* @p: task to run next on CPU */
+/**
+ * set_next_task_cbs - prepare a CBS task when it is chosen to run
+ * @rq: runqueue pointer
+ * @p: task to run next
+ * @first: true if this is the task's first slice
+ *
+ * Records the slice start time and arms the replenish timer for soft
+ * servers as needed.
+ */
 static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 {
 	struct sched_cbs_entity *cbs_se;
@@ -547,27 +678,60 @@ static void set_next_task_cbs(struct rq *rq, struct task_struct *p, bool first)
 	}
 }
 
-
+/**
+ * select_task_rq_cbs - choose a CPU for a CBS task
+ * @p: task to place
+ * @cpu: preferred cpu
+ * @flags: selection flags (unused)
+ *
+ * Currently simply returns the preferred cpu.
+ */
 static int select_task_rq_cbs(struct task_struct *p, int cpu, int flags)
 {
-        return cpu;
+	return cpu;
 }
 
-
+/**
+ * task_tick_cbs - per-tick handler for CBS tasks
+ * @rq: runqueue pointer
+ * @p: currently running task
+ * @queued: queued flag (unused)
+ *
+ * Updates the current entity's budget and triggers reschedule when needed.
+ */
 static void task_tick_cbs(struct rq *rq, struct task_struct *p, int queued)
 {
 	update_curr_cbs(rq);
 }
 
-
+/**
+ * prio_changed_cbs - handle priority change for CBS tasks
+ * @rq: runqueue pointer
+ * @p: affected task
+ * @oldprio: previous priority (unused)
+ *
+ * Currently a no-op; present to satisfy scheduler interface.
+ */
 static void prio_changed_cbs(struct rq *rq, struct task_struct *p, u64 oldprio)
 {}
 
-
+/**
+ * switched_to_cbs - handle task switch to CBS policy
+ * @rq: runqueue pointer
+ * @task: task switched to CBS
+ *
+ * Currently a no-op; present to satisfy scheduler interface.
+ */
 static void switched_to_cbs(struct rq *rq, struct task_struct *task)
 {}
 
-
+/**
+ * update_curr_cbs - update the currently running CBS entity
+ * @rq: runqueue pointer
+ *
+ * Updates the running entity's remaining budget based on elapsed time
+ * and requests a reschedule if the budget is exhausted.
+ */
 static void update_curr_cbs(struct rq *rq)
 {
 	struct task_struct *curr = rq->curr;
@@ -588,7 +752,6 @@ static void update_curr_cbs(struct rq *rq)
 	if (cbs_se->server.remaining_budget == 0)
 		resched_curr(rq);
 }
-
 
 DEFINE_SCHED_CLASS(cbs) = {
         .queue_mask        = 8,
