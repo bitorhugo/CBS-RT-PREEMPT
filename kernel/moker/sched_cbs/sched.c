@@ -381,7 +381,6 @@ static bool dequeue_task_cbs(struct rq *rq, struct task_struct *p, int flags)
 {
         struct sched_cbs_entity *cbs_se;
         struct cbs_rq           *cbs_rq;
-	int is_disarmed;
 	u64 now;
 
 	raw_spin_lock(&rq->cbs.lock);
