@@ -1,0 +1,52 @@
+#+author: v
+#+date: <2026-05-25 Mon>
+
+* SCHED_CBS Userspace Testing
+This directory contains the userspace testing framework and visualization tools
+for the custom SCHED_CBS kernel scheduling class.
+
+** Compilation
+To compile the testing framework, simply run make in this directory:
+
+#+begin_src Bash
+make
+#+end_src
+
+This will build the necessary executables, including the launcher orchestration
+tool and the periodic task simulator.
+
+** Running a Test
+To execute a workload, run the launcher executable and pass your desired taskset
+configuration file as an argument. For example:
+
+#+begin_src Bash
+./launcher taskset2.txt
+#+end_src
+
+Note: The launcher will automatically enable kernel tracing, fork the tasks
+according to the configuration, wait for them to finish, and safely disable
+tracing upon exit.
+
+** Generating the Gantt Chart
+Once the test has finished running, you can extract the kernel trace logs and
+generate a visual Gantt chart of the scheduling timeline.
+
+1. Extract the logs Read the live trace data from the procfs interface and save
+   it to a CSV file:
+
+#+begin_src Bash
+cat /proc/moker_trace > cbs-logs.csv
+#+end_src
+
+2. Generate the plot Run the provided Python parsing script to process the CSV
+   and generate the image:
+
+#+begin_src Bash
+./plot.py
+#+end_src
+
+(Note: Depending on your environment, you may need to explicitly use python3
+plot.py)
+
+This script will output an image file named cbs_gantt.png in your current
+directory, which visualizes the EDF and CBS scheduling decisions over time.

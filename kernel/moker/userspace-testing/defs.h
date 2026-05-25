@@ -27,12 +27,12 @@
 
 
 struct task {
-	int id;
-	int is_hard;
-	unsigned long long C; //exec
-	unsigned long long T; //period
-	unsigned long long O; //first job offset
-	unsigned int njobs; //number of jobs
+	int id;               /* task identification */
+	int is_hard;          /* hard/soft task classification */
+	unsigned long long C; /* exec */
+	unsigned long long T; /* period */
+	unsigned long long O; /* first job offset */
+	unsigned int njobs;   /* number of jobs */
 };
 
 #endif
